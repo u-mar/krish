@@ -100,6 +100,11 @@ const superAdminRoutes = [
             name: "Swaps Report",
             path: "/dashboard/superAdmin/report/swap",
           },
+          {
+            name: "Account Report",
+            path: "/dashboard/superAdmin/report/account/history",
+            new: true,
+          },
         ],
       },
       {
@@ -208,6 +213,11 @@ const adminRoutes = [
             name: "Swaps Report",
             path: "/dashboard/admin/report/swap",
           },
+          {
+            name: "Account Report",
+            path: "/dashboard/admin/report/account/history",
+            new: true,
+          },
         ],
       },
       {
@@ -312,6 +322,11 @@ const viewerRoutes = [
           {
             name: "Swaps Report",
             path: "/dashboard/viewer/report/swap",
+          },
+          {
+            name: "Account Report",
+            path: "/dashboard/viewer/report/account/history",
+            new: true,
           },
         ],
       },

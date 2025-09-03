@@ -3,9 +3,10 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useMemo, useState } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
+import NewBadge from './NewBadge';
 
 const SidebarItem = ({ item }: { item: any }) => {
-  const { name, path, icon: Icon, subItems } = item; // Handle subItems
+  const { name, path, icon: Icon, subItems, new: isNew } = item; // Handle subItems and new property
   const pathname = usePathname();
   const isActive = useMemo(() => path === pathname, [path, pathname]);
 
@@ -30,7 +31,10 @@ const SidebarItem = ({ item }: { item: any }) => {
             }`}
           >
             {Icon && <Icon size={18} className="mr-4" />} {/* Icon for the item */}
-            {name}
+            <div className="flex items-center">
+              {name}
+              {isNew && <NewBadge />}
+            </div>
             {isActive && (
               <div className="absolute left-0 top-0 bottom-0 w-1 bg-green-500"></div>
             )}
@@ -46,7 +50,10 @@ const SidebarItem = ({ item }: { item: any }) => {
             onClick={handleToggle}
           >
             {Icon && <Icon size={18} className="mr-4" />}
-            {name}
+            <div className="flex items-center">
+              {name}
+              {(isNew || subItems.some((item: any) => item.new)) && <NewBadge />}
+            </div>
             <span className="ml-auto">
               {isOpen ? (
                 <ChevronDown size={16} className="text-gray-400" />
@@ -68,7 +75,10 @@ const SidebarItem = ({ item }: { item: any }) => {
                         : 'text-gray-400 hover:bg-gray-800 hover:text-white'
                     }`}
                   >
-                    {subItem.name}
+                    <div className="flex items-center">
+                      {subItem.name}
+                      {subItem.new && <NewBadge />}
+                    </div>
                   </div>
                 </Link>
               ))}

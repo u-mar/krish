@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/prisma/client"; // Adjust the path to your Prisma client file
 
+export const dynamic = 'force-dynamic';
+
 export async function GET() {
   try {
     // Fetch all products and their associated SellItems (order items)

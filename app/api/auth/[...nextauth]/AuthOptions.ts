@@ -1,7 +1,9 @@
+import { PrismaAdapter } from "@next-auth/prisma-adapter";
 import { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcrypt";
 import prisma from "@/prisma/client";
+import { PrismaClient } from "@prisma/client";
 import { z } from "zod";
 
 export const AuthOptions: NextAuthOptions = {
@@ -16,103 +18,73 @@ export const AuthOptions: NextAuthOptions = {
       authorize: async (credentials) => {
         if (!credentials) return null;
 
-        try {
-          // Input validation
-          const schema = z.object({
-            email: z.string().email(),
-            password: z.string().min(8),
-          });
+        // Input validation
+        const schema = z.object({
+          email: z.string().email(),
+          password: z.string().min(8),
+        });
 
-          const parsed = schema.safeParse(credentials);
-          if (!parsed.success) {
-            throw new Error("Invalid input");
-          }
+        const parsed = schema.safeParse(credentials);
+        if (!parsed.success) {
+          throw new Error("Invalid input");
+        }
 
-          const { email, password } = parsed.data;
+        const { email, password } = parsed.data;
 
-          // Convert email to lowercase for case-insensitive comparison
-          const normalizedEmail = email.toLowerCase();
+        // Convert email to lowercase for case-insensitive comparison
+        const normalizedEmail = email.toLowerCase();
 
-          // Fetch user with timeout protection
-          const user = await Promise.race([
-            prisma.user.findUnique({
-              where: { email: normalizedEmail },
-              select: {
-                id: true,
-                name: true,
-                email: true,
-                role: true,
-                image: true,
-                password: true,
-                failedAttempts: true,
-                lockoutUntil: true,
-              },
-            }),
-            new Promise((_, reject) =>
-              setTimeout(() => reject(new Error("Database timeout")), 8000)
-            ),
-          ]) as any;
+        const user = await prisma.user.findUnique({
+          where: { email: normalizedEmail },
+        });
 
-          if (!user) {
-            throw new Error("Invalid email or password");
-          }
+        if (!user) {
+          throw new Error("Invalid email or password");
+        }
 
-          const currentTime = new Date();
+        const currentTime = new Date();
 
-          // Lockout mechanism
-          if (user.lockoutUntil && currentTime < user.lockoutUntil) {
-            throw new Error(
-              `Account locked. Try again after ${user.lockoutUntil.toLocaleTimeString()}`
-            );
-          }
+        // Lockout mechanism
+        if (user.lockoutUntil && currentTime < user.lockoutUntil) {
+          throw new Error(
+            `Account locked. Try again after ${user.lockoutUntil.toLocaleTimeString()}`
+          );
+        }
 
-          const isValidPassword = await bcrypt.compare(password, user.password);
+        const isValidPassword = await bcrypt.compare(password, user.password);
 
-          if (!isValidPassword) {
-            const failedAttempts = user.failedAttempts + 1;
-            const lockoutUntil =
-              failedAttempts >= 5
-                ? new Date(currentTime.getTime() + 15 * 60 * 1000)
-                : null;
+        if (!isValidPassword) {
+          const failedAttempts = user.failedAttempts + 1;
+          const lockoutUntil =
+            failedAttempts >= 5
+              ? new Date(currentTime.getTime() + 15 * 60 * 1000)
+              : null;
 
-            // Update failed attempts (non-blocking)
-            prisma.user.update({
-              where: { email: normalizedEmail },
-              data: {
-                failedAttempts,
-                lockoutUntil,
-              },
-            }).catch(() => {
-              // Silently fail - don't block login
-            });
-
-            if (lockoutUntil) {
-              throw new Error("Too many failed attempts. Try again in 15 minutes.");
-            } else {
-              throw new Error("Invalid email or password");
-            }
-          }
-
-          // Reset failed attempts (non-blocking)
-          prisma.user.update({
+          await prisma.user.update({
             where: { email: normalizedEmail },
             data: {
-              failedAttempts: 0,
-              lockoutUntil: null,
+              failedAttempts,
+              lockoutUntil,
             },
-          }).catch(() => {
-            // Silently fail - don't block login
           });
 
-          // Return user without password
-          const { password: _, ...userWithoutPassword } = user;
-          return userWithoutPassword;
-        } catch (error: any) {
-          if (error.message === "Database timeout") {
-            throw new Error("Connection timeout. Please try again.");
+          if (lockoutUntil) {
+            throw new Error("Too many failed attempts. Try again in 15 minutes.");
+          } else {
+            throw new Error("Invalid email or password");
           }
-          throw error;
         }
+
+        // Reset failed attempts
+        await prisma.user.update({
+          where: { email: normalizedEmail },
+          data: {
+            failedAttempts: 0,
+            lockoutUntil: null,
+          },
+        });
+
+        return user;
       },
     }),
   ],
@@ -132,8 +104,7 @@ export const AuthOptions: NextAuthOptions = {
     strategy: "jwt",
     maxAge: 2 * 60 * 60,
   },
-  // Removed PrismaAdapter - not needed for JWT strategy and can cause timeout issues
-  // adapter: PrismaAdapter(prisma),
+  adapter: PrismaAdapter(new PrismaClient()),
   pages: {
     signIn: "/auth/signIn",
   },

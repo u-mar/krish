@@ -16,6 +16,10 @@ const prismaOptions: Prisma.PrismaClientOptions = {
 // check if PrismaClient is not on `globalThis` object
 if (process.env.NODE_ENV === 'production') {
     prisma = new PrismaClient(prismaOptions);
+    // Warm up connection in production (serverless) - helps reduce cold start latency
+    prisma.$connect().catch(() => {
+        // Silently fail - connection will be established on first query
+    });
 } else {
     if (!globalThis.prisma) {
         globalThis.prisma = new PrismaClient(prismaOptions);

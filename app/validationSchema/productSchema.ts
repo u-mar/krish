@@ -10,7 +10,7 @@ const skuSchema = z.object({
 // Define the schema for new variants
 const newVariantSchema = z.object({
   color: z.string().min(1, "Color is required"),
-  skus: z.array(skuSchema).nonempty("At least one SKU is required"),
+  skus: z.array(skuSchema).optional(), // Make SKUs optional
 });
 
 // Define the schema for existing variants (with id, createdAt, and updatedAt)

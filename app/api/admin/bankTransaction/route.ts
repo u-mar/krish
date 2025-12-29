@@ -19,8 +19,21 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    // Handle accountId - get first account if not provided or invalid
+    let accountId = body.accountId;
+    if (!accountId || accountId === "default" || accountId.length !== 24) {
+      const firstAccount = await prisma.accounts.findFirst();
+      if (!firstAccount) {
+        return NextResponse.json(
+          { error: "No accounts available in the system" },
+          { status: 404 }
+        );
+      }
+      accountId = firstAccount.id;
+    }
+
     const account = await prisma.accounts.findUnique({
-      where: { id: body.accountId },
+      where: { id: accountId },
     });
 
     if (!account) {
@@ -53,7 +66,7 @@ export async function POST(request: NextRequest) {
     const newTransaction = await prisma.bankTransaction.create({
       data: {
         bankAccountId: body.bankAccountId,
-        accountId: body.accountId,
+        accountId: accountId,
         cashBalance: body.cashBalance ?? 0.0,
         digitalBalance: body.digitalBalance ?? 0.0,
         details: body.details,
@@ -65,7 +78,7 @@ export async function POST(request: NextRequest) {
 
     // Update the account with the new balance and cash balance
     await prisma.accounts.update({
-      where: { id: body.accountId },
+      where: { id: accountId },
       data: {
         cashBalance: newCashBalance,
         balance: newBalance,

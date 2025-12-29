@@ -37,9 +37,21 @@ export async function GET(request: NextRequest) {
 
   const categories = await prisma.category.findMany({
     orderBy: { createdAt: "desc" },
-    include:{
-       products: true,
-    }
+    select: {
+      id: true,
+      name: true,
+      createdAt: true,
+      _count: {
+        select: {
+          products: true,
+        },
+      },
+    },
   });
-  return NextResponse.json(categories, { status: 200 });
+  return NextResponse.json(categories, {
+    status: 200,
+    headers: {
+      'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=120',
+    },
+  });
 }

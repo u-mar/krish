@@ -41,7 +41,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "User not found" }, { status: 404 });
   }
 
-  const { items, accountId, type, cashAmount, digitalAmount } = body;
+  const { items, accountId, type, cashAmount, digitalAmount, shopId } = body;
 
   if (!Array.isArray(items) || items.length === 0) {
     return NextResponse.json({ error: "Items are required" }, { status: 400 });
@@ -50,6 +50,13 @@ export async function POST(request: NextRequest) {
   if (!accountId) {
     return NextResponse.json(
       { error: "Account ID is required" },
+      { status: 400 }
+    );
+  }
+
+  if (!shopId) {
+    return NextResponse.json(
+      { error: "Shop ID is required" },
       { status: 400 }
     );
   }
@@ -121,6 +128,36 @@ export async function POST(request: NextRequest) {
               where: { id: item.productId },
               data: { stockQuantity: totalStockQuantity },
             });
+
+            // Reduce shop inventory
+            const shopInventory = await transactionPrisma.shopInventory.findFirst({
+              where: {
+                shopId: shopId,
+                productId: item.productId,
+                skuId: item.skuId,
+              },
+            });
+
+            if (!shopInventory) {
+              throw new Error(
+                `Product ${item.productId} with SKU ${item.skuId} not found in shop inventory`
+              );
+            }
+
+            if (shopInventory.quantity < item.quantity) {
+              throw new Error(
+                `Not enough shop inventory. Available: ${shopInventory.quantity}, Requested: ${item.quantity}`
+              );
+            }
+
+            await transactionPrisma.shopInventory.update({
+              where: { id: shopInventory.id },
+              data: {
+                quantity: {
+                  decrement: item.quantity,
+                },
+              },
+            });
           }
 
           // Calculate total amount
@@ -157,6 +194,7 @@ export async function POST(request: NextRequest) {
               type: type,
               status: body.status || "pending",
               accountId: accountId,
+              shopId: shopId, // Link the sale to the shop
               items: {
                 create: items.map((item) => ({
                   productId: item.productId,
@@ -225,10 +263,34 @@ export async function GET(request: NextRequest) {
   try {
     const sells = await prisma.sell.findMany({
       orderBy: { createdAt: "desc" }, // Order by creation date in descending order
-      include: {
+      select: {
+        id: true,
+        orderId: true,
+        createdAt: true,
+        total: true,
+        type: true,
+        cashAmount: true,
+        digitalAmount: true,
+        status: true,
+        discount: true,
+        userId: true,
+        accountId: true,
+        shopId: true,
+        customerId: true,
         items: {
-          include: {
-            product: true,
+          select: {
+            id: true,
+            quantity: true,
+            price: true,
+            productId: true,
+            skuId: true,
+            product: {
+              select: {
+                id: true,
+                name: true,
+                price: true,
+              },
+            },
             sku: {
               select: {
                 size: true,
@@ -239,12 +301,45 @@ export async function GET(request: NextRequest) {
               },
             },
           },
-        }, // Include associated items and their SKUs
-        account: true, // Include account details
+        },
+        account: {
+          select: {
+            id: true,
+            account: true,
+            balance: true,
+            cashBalance: true,
+            default: true,
+          },
+        },
+        customer: {
+          select: {
+            id: true,
+            phone: true,
+            customerType: true,
+          },
+        },
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+        shop: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
       },
     });
 
-    return NextResponse.json(sells, { status: 200 });
+    return NextResponse.json(sells, {
+      status: 200,
+      headers: {
+        'Cache-Control': 'public, s-maxage=10, stale-while-revalidate=30',
+      },
+    });
   } catch (error: any) {
     console.error("Error retrieving sells:", error);
     return NextResponse.json(

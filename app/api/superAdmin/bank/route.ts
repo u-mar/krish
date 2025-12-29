@@ -56,29 +56,36 @@ export async function GET(request: NextRequest) {
       transactions: {
         select: {
           amount: true,
+          amountPaid: true,
           acc: true, // 'cr' or 'dr' to indicate credit or debit
         },
       },
     },
   });
 
-  // Calculate the balance for each bank account based on 'dr' and 'cr' transactions
+  // Calculate the balance and debt owed for each bank account
   const bankAccountsWithBalance = bankAccounts.map((account) => {
     const totalCr = account.transactions
       .filter((transaction) => transaction.acc === "cr")
       .reduce((sum, transaction) => sum + transaction.amount, 0);
 
+    // For debits, calculate remaining debt (amount - amountPaid)
     const totalDr = account.transactions
       .filter((transaction) => transaction.acc === "dr")
       .reduce((sum, transaction) => sum + transaction.amount, 0);
 
+    const debtOwed = account.transactions
+      .filter((transaction) => transaction.acc === "dr")
+      .reduce((sum, transaction) => sum + (transaction.amount - transaction.amountPaid), 0);
+
     // Calculate balance by subtracting total debits from total credits
     const balance = totalCr - totalDr;
 
-    // Return the account data along with the calculated balance
+    // Return the account data along with the calculated balance and debt owed
     return {
       ...account,
       balance, // Include the calculated balance
+      debtOwed, // Include the debt owed after payments
     };
   });
 

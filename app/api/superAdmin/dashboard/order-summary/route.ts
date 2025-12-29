@@ -44,6 +44,7 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const period = searchParams.get("period") || "this_week"; // Default to 'this_week'
+    const location = searchParams.get("location");
 
     let startDate: Date;
     const endDate = new Date(); // Now
@@ -66,14 +67,23 @@ export async function GET(request: NextRequest) {
         break;
     }
 
+    // Build where clause with optional location filter
+    const whereClause: any = {
+      createdAt: {
+        gte: startDate,
+        lte: endDate,
+      },
+    };
+
+    // Add shop filter if location is specified and not "all"
+    if (location && location !== "all" && location.startsWith("shop-")) {
+      const shopId = location.replace("shop-", "");
+      whereClause.shopId = shopId;
+    }
+
     // Fetch sells within the time period
     const sells = await prisma.sell.findMany({
-      where: {
-        createdAt: {
-          gte: startDate,
-          lte: endDate,
-        },
-      },
+      where: whereClause,
       include: {
         items: true,
       },
@@ -164,6 +174,10 @@ export async function GET(request: NextRequest) {
       totalProfit,
       labels,
       data,
+    }, {
+      headers: {
+        'Cache-Control': 'public, s-maxage=30, stale-while-revalidate=60',
+      },
     });
   } catch (error) {
     console.error("Error fetching order summary:", error);

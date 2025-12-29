@@ -23,7 +23,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { Loader2 } from "lucide-react";
 import { bankSchema } from "@/app/validationSchema/bankSchema";
 import { BankAccount } from "@prisma/client";
-import BankUserIdSelect from "./UserIdSelect";
 
 
 
@@ -50,7 +49,7 @@ const AddBankForm = ({ bank }: { bank?: BankAccount }) => {
         : await axios.post(`${API}/superAdmin/bank`, values);
 
       queryClient.invalidateQueries({ queryKey: ["bank"] });
-      toast.success(`Successfully ${bank ? "Updated" : "Created"} Bank`);
+      toast.success(`Successfully ${bank ? "Updated" : "Created"} Customer`);
       router.push("/dashboard/superAdmin/bank");
     } catch (error) {
       toast.error("An error occurred. Please try again.");
@@ -63,13 +62,13 @@ const AddBankForm = ({ bank }: { bank?: BankAccount }) => {
     <>
       <Card className="max-w-4xl mx-auto my-10 p-6 shadow-lg rounded-lg bg-white">
         <CardHeader className="mb-4">
-          <CardTitle className="text-3xl font-semibold text-gray-700">Add Bank</CardTitle>
+          <CardTitle className="text-3xl font-semibold text-gray-700">Add Customer</CardTitle>
         </CardHeader>
         <CardContent>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
 
-              {/* From Amounts Row */}
+              {/* Customer Name */}
               <div className="grid grid-cols-1  gap-4 border-b pb-4">
 
                 <FormField
@@ -77,12 +76,12 @@ const AddBankForm = ({ bank }: { bank?: BankAccount }) => {
                   name="name"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Taker Name</FormLabel>
+                      <FormLabel>Customer Name</FormLabel>
                       <FormControl>
                         <Input
                           aria-autocomplete="none"
                           autoComplete="off"
-                          placeholder="Enter taker name"
+                          placeholder="Enter customer name"
                           type="text"
                           {...field}
                         />
@@ -90,16 +89,6 @@ const AddBankForm = ({ bank }: { bank?: BankAccount }) => {
                       <FormMessage />
                     </FormItem>
                   )}
-                />
-              </div>
-
-              {/* To Account Row */}
-              <div className="grid grid-cols-1 gap-4 border-b pb-4">
-                {/* User ID */}
-                <FormField
-                  control={form.control}
-                  name="userId"
-                  render={() => <BankUserIdSelect control={form.control} />}
                 />
               </div>
 
@@ -125,14 +114,14 @@ export const SubmitButtonWithContent = React.forwardRef<HTMLButtonElement, { loa
     if (loading) {
       return (
         <Button className="space-x-2 gap-x-1 bg-gray-400" disabled ref={ref}>
-          Submitting Bank
+          Submitting Customer
           <Loader2 className="animate-spin h-5 w-5 text-white mx-2" />
         </Button>
       );
     }
     return (
       <Button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white" ref={ref}>
-        Submit Bank
+        Submit Customer
       </Button>
     );
   }

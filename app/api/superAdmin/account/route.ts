@@ -41,9 +41,24 @@ export async function GET(request: NextRequest) {
 
   const accounts = await prisma.accounts.findMany({
     orderBy: { createdAt: "desc" },
-    include: {
-      transactions: true,
-    }
+    select: {
+      id: true,
+      account: true,
+      default: true,
+      balance: true,
+      cashBalance: true,
+      createdAt: true,
+      _count: {
+        select: {
+          transactions: true,
+        },
+      },
+    },
   });
-  return NextResponse.json(accounts, { status: 200 });
+  return NextResponse.json(accounts, {
+    status: 200,
+    headers: {
+      'Cache-Control': 'public, s-maxage=30, stale-while-revalidate=60',
+    },
+  });
 }

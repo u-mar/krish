@@ -29,10 +29,10 @@ export default function List() {
   return (
     <div className="my-4 space-y-4 sm:p-6 lg:p-2">
       <div className="flex justify-between">
-        <h1 className="font-bold text-2xl">Banks</h1>
+        <h1 className="font-bold text-2xl">Customers</h1>
         <Link href={"/dashboard/admin/bank/add"}>
           <Button variant={"default"}>
-            Add Bank
+            Add Customer
           </Button>
         </Link>
       </div>

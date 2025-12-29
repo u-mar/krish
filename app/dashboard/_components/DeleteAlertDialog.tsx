@@ -12,17 +12,19 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import axios from "axios";
 import { toast } from "sonner";
-import { Loader2 } from "lucide-react";
+import { Loader2, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { API } from "@/lib/config";
 import { HiOutlineTrash } from "react-icons/hi";
 
 import { useQueryClient } from "@tanstack/react-query";
 
-const DeleteAlertDialog = ({ id, type }: { id: string; type: string }) => {
+const DeleteAlertDialog = ({ id, type, inDropdown = false }: { id: string; type: string; inDropdown?: boolean }) => {
   const [loading, setLoading] = useState(false);
+  const [open, setOpen] = useState(false);
   const router = useRouter();
   const queryClient = useQueryClient();
 
@@ -44,18 +46,11 @@ const DeleteAlertDialog = ({ id, type }: { id: string; type: string }) => {
       } else if (type === "transaction") {
         await axios.delete(`${API}/admin/transaction/${id}`);
         queryClient.invalidateQueries({ queryKey: [`transaction`] });
-      } else if (type === "store") {
-        await axios.delete(`${API}/admin/account/${id}`);
-        queryClient.invalidateQueries({ queryKey: [`account`] });
       } else if (type === "transactionCategory") {
         await axios.delete(`${API}/admin/transaction/category/${id}`);
         queryClient.invalidateQueries({ queryKey: [`transactionCategory`] });
       }
-       else if (type === "swap") {
-        await axios.delete(`${API}/admin/swap/${id}`);
-        queryClient.invalidateQueries({ queryKey: [`swap`] });
-      }
-       else if (type === "bank") {
+       else if (type === "customer" || type === "bank") {
         await axios.delete(`${API}/admin/bank/${id}`);
         queryClient.invalidateQueries({ queryKey: [`bank`] });
       }
@@ -67,10 +62,19 @@ const DeleteAlertDialog = ({ id, type }: { id: string; type: string }) => {
         await axios.delete(`${API}/admin/product/stock/${id}`);
         queryClient.invalidateQueries({ queryKey: [`StockProduct`] });
       }
+       else if (type === "store") {
+        await axios.delete(`${API}/superAdmin/store/${id}`);
+        queryClient.invalidateQueries({ queryKey: [`stores`] });
+      }
+       else if (type === "shop") {
+        await axios.delete(`${API}/superAdmin/shop/${id}`);
+        queryClient.invalidateQueries({ queryKey: [`shops`] });
+      }
   
       // Successful deletion
       router.refresh();
       toast.success(`${type.charAt(0).toUpperCase() + type.slice(1)} deleted successfully!`);
+      setOpen(false);
     } catch (error: any) {
       console.error("Error during deletion:", error);
   
@@ -84,19 +88,49 @@ const DeleteAlertDialog = ({ id, type }: { id: string; type: string }) => {
     }
   };
   
+  if (inDropdown) {
+    return (
+      <AlertDialog open={open} onOpenChange={setOpen}>
+        <DropdownMenuItem
+          onSelect={(e) => {
+            e.preventDefault();
+            setOpen(true);
+          }}
+        >
+          <Trash2 className="mr-2 h-4 w-4" />
+          Delete
+        </DropdownMenuItem>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete your
+              account and remove your data from our servers.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} disabled={loading}>
+              {loading ? <Loader2 className="animate-spin h-4 w-4" /> : "Continue"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    );
+  }
 
   return (
-    <AlertDialog>
-      <AlertDialogTrigger>
+    <AlertDialog open={open} onOpenChange={setOpen}>
+      <AlertDialogTrigger asChild>
         {loading ? (
-          <button className="px-3 py-1 border bg-red-600 text-white flex border-gray-400 rounded hover:bg-gray-100">
+          <div className="px-3 py-1 border bg-red-600 text-white flex border-gray-400 rounded hover:bg-red-500 cursor-pointer items-center">
             Delete
             <Loader2 className="animate-spin h-4 w-4 text-white mx-2" />
-          </button>
+          </div>
         ) : (
-          <button className="px-3 py-1 border bg-red-600 text-white border-gray-400 rounded hover:bg-red-500">
+          <div className="px-3 py-1 border bg-red-600 text-white border-gray-400 rounded hover:bg-red-500 cursor-pointer">
             Delete
-          </button>
+          </div>
         )}
       </AlertDialogTrigger>
       <AlertDialogContent>

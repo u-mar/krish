@@ -34,7 +34,7 @@ const Card: React.FC<CardProps> = ({ title, content, icon, bgColor }) => {
   );
 };
 
-const CardsDetails = () => {
+const CardsDetails = ({ selectedLocation }: { selectedLocation?: string }) => {
   const [stats, setStats] = useState<{
     totalProducts: number;
     availableStock: number;
@@ -47,7 +47,10 @@ const CardsDetails = () => {
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        const response = await axios.get(`${API}/superAdmin/dashboard/stats`);
+        const params = selectedLocation && selectedLocation !== 'all' 
+          ? `?location=${selectedLocation}` 
+          : '';
+        const response = await axios.get(`${API}/superAdmin/dashboard/stats${params}`);
         setStats(response.data);
       } catch (error) {
         console.error('Error fetching stats:', error);
@@ -57,7 +60,7 @@ const CardsDetails = () => {
     };
 
     fetchStats();
-  }, []);
+  }, [selectedLocation]);
 
   if (loading) {
     return (

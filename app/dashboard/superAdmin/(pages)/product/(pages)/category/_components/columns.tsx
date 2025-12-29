@@ -45,7 +45,8 @@ export const columns: ColumnDef<Category>[] = [
 
     header: () => <div className="text-right">Products </div>,
     cell: ({ row }: { row: any }) => {
-      const productsLength = row.getValue("products").length;
+      const products = row.getValue("products");
+      const productsLength = products?.length || 0;
       return <div className="text-right font-medium">{productsLength}</div>;
     },
   },

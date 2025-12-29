@@ -47,14 +47,27 @@ const superAdminRoutes = [
         icon: Group,
       },
       {
+        name: "Stores",
+        path: "/dashboard/superAdmin/store",
+        icon: Store,
+        new: true,
+      },
+      {
+        name: "Shops",
+        path: "/dashboard/superAdmin/shop",
+        icon: MonitorUp,
+        new: true,
+      },
+      {
         name: "Orders",
         path: "/dashboard/superAdmin/sales",
         icon: ShoppingCart,
       },
       {
-        name: "Stock",
-        path: "/dashboard/superAdmin/product/stock",
-        icon: PackagePlus,
+        name: "Transfers",
+        path: "/dashboard/superAdmin/transfer",
+        icon: ArrowRightLeft,
+        new: true,
       },
     ],
   },
@@ -67,12 +80,7 @@ const superAdminRoutes = [
         icon: Send,
       },
       {
-        name: "Swap",
-        path: "/dashboard/superAdmin/swap",
-        icon: ArrowRightLeft,
-      },
-      {
-        name: "Bank",
+        name: "Customers",
         path: "/dashboard/superAdmin/bank",
         icon: Landmark,
       },
@@ -97,20 +105,11 @@ const superAdminRoutes = [
             path: "/dashboard/superAdmin/report/exchange",
           },
           {
-            name: "Swaps Report",
-            path: "/dashboard/superAdmin/report/swap",
-          },
-          {
             name: "Account Report",
             path: "/dashboard/superAdmin/report/account/history",
             new: true,
           },
         ],
-      },
-      {
-        name: "Store",
-        path: "/dashboard/superAdmin/store",
-        icon: Store,
       },
     ],
   },
@@ -164,11 +163,6 @@ const adminRoutes = [
         path: "/dashboard/admin/sales",
         icon: ShoppingCart,
       },
-      {
-        name: "Stock",
-        path: "/dashboard/admin/product/stock",
-        icon: PackagePlus,
-      },
     ],
   },
   {
@@ -180,12 +174,7 @@ const adminRoutes = [
         icon: Send,
       },
       {
-        name: "Swap",
-        path: "/dashboard/admin/swap",
-        icon: ArrowRightLeft,
-      },
-      {
-        name: "Bank",
+        name: "Customers",
         path: "/dashboard/admin/bank",
         icon: Landmark,
       },
@@ -210,20 +199,11 @@ const adminRoutes = [
             path: "/dashboard/admin/report/exchange",
           },
           {
-            name: "Swaps Report",
-            path: "/dashboard/admin/report/swap",
-          },
-          {
             name: "Account Report",
             path: "/dashboard/admin/report/account/history",
             new: true,
           },
         ],
-      },
-      {
-        name: "Store",
-        path: "/dashboard/admin/store",
-        icon: Store,
       },
     ],
   },
@@ -290,12 +270,7 @@ const viewerRoutes = [
         icon: Send,
       },
       {
-        name: "Swap",
-        path: "/dashboard/viewer/swap",
-        icon: ArrowRightLeft,
-      },
-      {
-        name: "Bank",
+        name: "Customers",
         path: "/dashboard/viewer/bank",
         icon: Landmark,
       },
@@ -320,20 +295,11 @@ const viewerRoutes = [
             path: "/dashboard/viewer/report/exchange",
           },
           {
-            name: "Swaps Report",
-            path: "/dashboard/viewer/report/swap",
-          },
-          {
             name: "Account Report",
             path: "/dashboard/viewer/report/account/history",
             new: true,
           },
         ],
-      },
-      {
-        name: "Store",
-        path: "/dashboard/viewer/store",
-        icon: Store,
       },
     ],
   },

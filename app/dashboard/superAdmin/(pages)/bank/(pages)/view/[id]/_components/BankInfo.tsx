@@ -1,5 +1,6 @@
 'use client';
 import DeleteAlertDialog from "@/app/dashboard/_components/DeleteAlertDialog";
+import PayDebtDialog from "@/app/dashboard/_components/PayDebtDialog";
 import Link from "next/link";
 import React from "react";
 import axios from "axios";
@@ -26,6 +27,7 @@ export interface BankTransaction {
   };
   details?: string | null;
   amount: number;
+  amountPaid: number;
   acc: "cr" | "dr";
   cashBalance: number;
   digitalBalance: number;
@@ -55,16 +57,19 @@ const BankInfo: React.FC<BankInfoProps> = ({ bankId }) => {
   const bank = data.bank as BankAccount;
   const transactions = data.transactions as BankTransaction[];
 
-  // Group transactions by account type
+  // Group transactions by account type and calculate remaining balances
   const accountBalances = transactions.reduce((acc, tx) => {
     const accountType = tx.account.account;
     if (!acc[accountType]) {
       acc[accountType] = { credit: 0, debit: 0 };
     }
+    // For debits, use remaining balance (amount - amountPaid)
+    // For credits, use full amount
     if (tx.acc === "cr") {
       acc[accountType].credit += tx.amount;
     } else {
-      acc[accountType].debit += tx.amount;
+      const remainingDebt = tx.amount - tx.amountPaid;
+      acc[accountType].debit += remainingDebt;
     }
     return acc;
   }, {} as Record<string, { credit: number; debit: number }>);
@@ -76,15 +81,15 @@ const BankInfo: React.FC<BankInfoProps> = ({ bankId }) => {
         <p className="text-gray-500">Account Number: {bank.accountNumber}</p>
       </div>
 
-      {/* Display each account balance */}
+      {/* Display each account debt */}
       {Object.entries(accountBalances).map(([accountType, balance]) => {
         const totalBalance = balance.credit - balance.debit;
         return (
           <div key={accountType} className="text-center mb-4">
             <h2 className="text-xl font-semibold text-gray-800">
-              {accountType} Account Balance:
+              {accountType} Debt Owed:
               <span className={`ml-2 ${totalBalance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                {totalBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                {Math.abs(totalBalance).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </span>
             </h2>
           </div>
@@ -93,12 +98,6 @@ const BankInfo: React.FC<BankInfoProps> = ({ bankId }) => {
 
       {/* Action Buttons */}
       <div className="mt-4 flex gap-4 justify-center">
-        <Link
-          href={`/dashboard/superAdmin/bank/payment/add-payment?bankAccountId=${bank.id}&acc=credit`}
-          className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
-        >
-          Add Credit
-        </Link>
         <Link
           href={`/dashboard/superAdmin/bank/payment/add-payment?bankAccountId=${bank.id}&acc=debit`}
           className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700"
@@ -120,15 +119,19 @@ const BankInfo: React.FC<BankInfoProps> = ({ bankId }) => {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Account</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cash Amount</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Digital Amount</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total Amount</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Payment Status</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Details</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {transactions.map((tx) => (
+              {transactions.map((tx) => {
+                const remainingBalance = tx.amount - tx.amountPaid;
+                const percentPaid = (tx.amountPaid / tx.amount) * 100;
+                const isPaid = remainingBalance === 0;
+                
+                return (
                 <tr key={tx.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
                     {new Date(tx.createdAt).toLocaleString()}
@@ -142,19 +145,41 @@ const BankInfo: React.FC<BankInfoProps> = ({ bankId }) => {
                     {tx.account.account}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                    {tx.cashBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                    {tx.digitalBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
                     {tx.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm">
+                    {tx.acc === "dr" ? (
+                      isPaid ? (
+                        <span className="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                          Paid
+                        </span>
+                      ) : (
+                        <div className="flex flex-col">
+                          <span className="text-xs font-medium text-gray-700">
+                            {percentPaid.toFixed(1)}% paid
+                          </span>
+                          <span className="text-xs text-gray-500">
+                            Remaining: {remainingBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </span>
+                        </div>
+                      )
+                    ) : (
+                      <span className="text-gray-400">-</span>
+                    )}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {tx.details || "-"}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                     <div className="flex items-center space-x-2">
+                      {tx.acc === "dr" && !isPaid && (
+                        <PayDebtDialog
+                          transactionId={tx.id}
+                          amount={tx.amount}
+                          amountPaid={tx.amountPaid}
+                          role="superAdmin"
+                        />
+                      )}
                       <Link
                         className="px-3 py-1 bg-yellow-500 text-white rounded hover:bg-yellow-600"
                         href={`/dashboard/superAdmin/bank/payment/edit/${tx.id}`}
@@ -165,7 +190,8 @@ const BankInfo: React.FC<BankInfoProps> = ({ bankId }) => {
                     </div>
                   </td>
                 </tr>
-              ))}
+              );
+              })}
             </tbody>
           </table>
           </div>

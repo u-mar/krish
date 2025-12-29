@@ -32,12 +32,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Calculate the total stock quantity from all SKUs
+    // Calculate the total stock quantity from all SKUs (if they exist)
     let totalStockQuantity = 0;
     body.variants.forEach((variant: any) => {
-      variant.skus.forEach((sku: any) => {
-        totalStockQuantity += sku.stockQuantity;
-      });
+      if (variant.skus) {
+        variant.skus.forEach((sku: any) => {
+          totalStockQuantity += sku.stockQuantity;
+        });
+      }
     });
 
     // Create the product with the calculated total stock quantity
@@ -51,13 +53,15 @@ export async function POST(request: NextRequest) {
         variants: {
           create: body.variants.map((variant: any) => ({
             color: variant.color,
-            skus: {
-              create: variant.skus.map((sku: any) => ({
-                size: sku.size,
-                sku: sku.sku,
-                stockQuantity: sku.stockQuantity,
-              })),
-            },
+            ...(variant.skus && variant.skus.length > 0 && {
+              skus: {
+                create: variant.skus.map((sku: any) => ({
+                  size: sku.size,
+                  sku: sku.sku,
+                  stockQuantity: sku.stockQuantity,
+                })),
+              },
+            }),
           })),
         },
       },

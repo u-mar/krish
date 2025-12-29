@@ -34,9 +34,51 @@ export async function POST(request: NextRequest) {
 }
 
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    // Total Products
+    const { searchParams } = new URL(request.url);
+    const location = searchParams.get('location');
+    
+    // Parse location parameter (format: "shop-{id}" or "all")
+    const isShopFilter = location && location !== 'all' && location.startsWith('shop-');
+    const shopId = isShopFilter ? location.split('-')[1] : null;
+
+    if (shopId) {
+      // Filter by specific shop inventory
+      const shopInventory = await prisma.shopInventory.findMany({
+        where: { shopId },
+        include: {
+          sku: {
+            include: {
+              variant: {
+                include: {
+                  product: true,
+                },
+              },
+            },
+          },
+        },
+      });
+
+      // Calculate stats from shop inventory
+      const uniqueProducts = new Set(shopInventory.map(inv => inv.sku.variant.product.id));
+      const totalProducts = uniqueProducts.size;
+
+      const availableStock = shopInventory.reduce((sum, inv) => sum + inv.quantity, 0);
+
+      const LOW_STOCK_THRESHOLD = 5;
+      const lowStockCount = shopInventory.filter(inv => inv.quantity > 0 && inv.quantity <= LOW_STOCK_THRESHOLD).length;
+      const outOfStockCount = shopInventory.filter(inv => inv.quantity === 0).length;
+
+      return NextResponse.json({
+        totalProducts,
+        availableStock,
+        lowStock: lowStockCount,
+        outOfStock: outOfStockCount,
+      });
+    }
+
+    // Default: All products stats
     const totalProducts = await prisma.product.count();
 
     // Available Stock (Total stock quantity of all products where stockQuantity > 0)
@@ -77,6 +119,10 @@ export async function GET() {
       availableStock,
       lowStock: lowStockCount,
       outOfStock: outOfStockCount,
+    }, {
+      headers: {
+        'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=120',
+      },
     });
   } catch (error) {
     console.error('Error fetching stats:', error);

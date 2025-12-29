@@ -1,12 +1,5 @@
-import React from 'react';
-import List from './_components/List';
+import List from "./_components/List";
 
-const StorePage = () => {
-    return (
-        <div>
-            <List />
-        </div>
-    )
+export default function StorePage() {
+  return <List />;
 }
-
-export default StorePage;

@@ -18,7 +18,7 @@ interface Product {
     trend?: 'up' | 'down' | 'stable';
 }
 
-const TopProducts: React.FC = () => {
+const TopProducts: React.FC<{ selectedLocation?: string }> = ({ selectedLocation }) => {
     const [topProducts, setTopProducts] = useState<Product[]>([]);
     const [loading, setLoading] = useState<boolean>(true);
     const [error, setError] = useState<string | null>(null);
@@ -27,7 +27,10 @@ const TopProducts: React.FC = () => {
         setLoading(true);
         setError(null);
         try {
-            const response = await axios.get(`${API}/superAdmin/dashboard/top-products`);
+            const locationParam = selectedLocation && selectedLocation !== 'all' 
+                ? `?location=${selectedLocation}` 
+                : '';
+            const response = await axios.get(`${API}/superAdmin/dashboard/top-products${locationParam}`);
             setTopProducts(response.data);
         } catch (error) {
             console.error("Error fetching top products:", error);
@@ -39,7 +42,7 @@ const TopProducts: React.FC = () => {
 
     useEffect(() => {
         fetchTopProducts();
-    }, []);
+    }, [selectedLocation]);
 
     // Format currency consistently
     const formatCurrency = (amount: number) => {
@@ -156,12 +159,12 @@ const TopProducts: React.FC = () => {
                                     </div>
                                     <div className="flex items-center justify-center p-4">
                                         <p className="font-medium text-black dark:text-white">
-                                            ${formatCurrency(product.productPrice)}
+                                            KSH {formatCurrency(product.productPrice)}
                                         </p>
                                     </div>
                                     <div className="flex items-center justify-center p-4">
                                         <p className="font-medium text-meta-3">
-                                            ${formatCurrency(product.totalSales)}
+                                            KSH {formatCurrency(product.totalSales)}
                                         </p>
                                     </div>
                                     <div className="flex items-center justify-center p-4">
@@ -169,7 +172,7 @@ const TopProducts: React.FC = () => {
                                             {product.trend === 'up' && <ArrowUpIcon className="mr-1 h-4 w-4 text-meta-3" />}
                                             {product.trend === 'down' && <ArrowDownIcon className="mr-1 h-4 w-4 text-meta-1" />}
                                             <p className="font-medium text-meta-5">
-                                                ${formatCurrency(product.profit || 0)}
+                                                KSH {formatCurrency(product.profit || 0)}
                                             </p>
                                         </div>
                                     </div>
@@ -231,18 +234,18 @@ const TopProducts: React.FC = () => {
                                     </div>
                                     <div className="flex flex-col">
                                         <span className="text-gray-500 dark:text-gray-400">Price:</span>
-                                        <span className="font-medium text-black dark:text-white">${formatCurrency(product.productPrice)}</span>
+                                        <span className="font-medium text-black dark:text-white">KSH {formatCurrency(product.productPrice)}</span>
                                     </div>
                                     <div className="flex flex-col">
                                         <span className="text-gray-500 dark:text-gray-400">Sales:</span>
-                                        <span className="font-medium text-meta-3">${formatCurrency(product.totalSales)}</span>
+                                        <span className="font-medium text-meta-3">KSH {formatCurrency(product.totalSales)}</span>
                                     </div>
                                     <div className="flex flex-col">
                                         <span className="text-gray-500 dark:text-gray-400">Profit:</span>
                                         <div className="flex items-center">
                                             {product.trend === 'up' && <ArrowUpIcon className="mr-1 h-3 w-3 text-meta-3" />}
                                             {product.trend === 'down' && <ArrowDownIcon className="mr-1 h-3 w-3 text-meta-1" />}
-                                            <span className="font-medium text-meta-5">${formatCurrency(product.profit || 0)}</span>
+                                            <span className="font-medium text-meta-5">KSH {formatCurrency(product.profit || 0)}</span>
                                         </div>
                                     </div>
                                 </div>

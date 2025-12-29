@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { useForm, Controller } from "react-hook-form";
+import { useForm, Controller, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import {
@@ -25,17 +25,21 @@ import axios from "axios";
 import toast, { Toaster } from "react-hot-toast";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { Loader2 } from "lucide-react";
+import { Loader2, Plus, X } from "lucide-react";
 import Select from "react-select";
+import ReactSelect from "react-select";
 import { API } from "@/lib/config";
 import { StockQuantity } from "@prisma/client";
 
-// Validation schema
+// Validation schema - updated to support multiple items
 const stockSchema = z.object({
-  productId: z.string().min(1, "Please select a product"),
-  variantId: z.string().min(1, "Please select a variant"),
-  skuId: z.string().min(1, "Please select an SKU"),
-  quantity: z.number().min(1, "Quantity must be at least 1"),
+  items: z.array(z.object({
+    productId: z.string().min(1, "Please select a product"),
+    variantId: z.string().min(1, "Please select a variant"),
+    skuId: z.string().min(1, "Please select an SKU"),
+    quantity: z.number().min(1, "Quantity must be at least 1"),
+    unit: z.enum(["pieces", "boxes"]),
+  })).min(1, "At least one product is required"),
 });
 
 // Types
@@ -65,23 +69,29 @@ const StockQuantityForm = ({
 }) => {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
-  const [selectedVariants, setSelectedVariants] = useState<Variant[]>([]);
-  const [selectedSKUs, setSelectedSKUs] = useState<SKU[]>([]);
+  const [selectedVariants, setSelectedVariants] = useState<{ [key: number]: Variant[] }>({});
+  const [selectedSKUs, setSelectedSKUs] = useState<{ [key: number]: SKU[] }>({});
 
   const form = useForm({
     resolver: zodResolver(stockSchema),
-    defaultValues: {
-      productId: stockQuantity?.productId || "",
-      variantId: stockQuantity?.variantId || "",
-      skuId: stockQuantity?.skuId || "",
-      quantity: stockQuantity?.quantity || 1,
-    },
+    defaultValues: stockQuantity
+      ? {
+          items: [{
+            productId: stockQuantity.productId || "",
+            variantId: stockQuantity.variantId || "",
+            skuId: stockQuantity.skuId || "",
+            quantity: stockQuantity.quantity || 1,
+            unit: "pieces" as const,
+          }],
+        }
+      : {
+          items: [{ productId: "", variantId: "", skuId: "", quantity: 1, unit: "pieces" as const }],
+        },
   });
 
   const { control, handleSubmit, watch, setValue } = form;
-
-  const watchProductId = watch("productId");
-  const watchVariantId = watch("variantId");
+  const { fields, append, remove } = useFieldArray({ control, name: "items" });
+  const watchItems = watch("items");
 
   // Fetch products with variants and SKUs included
   const { data: products, isLoading: loadingProducts } = useQuery({
@@ -91,45 +101,67 @@ const StockQuantityForm = ({
     staleTime: 60 * 1000,
   });
 
-  // Update variants when a product is selected
-  useEffect(() => {
-    if (watchProductId) {
-      const selectedProduct = products?.find((p) => p.id === watchProductId);
-      if (selectedProduct) {
-        setSelectedVariants(selectedProduct.variants || []);
-        setValue("variantId", stockQuantity?.variantId || ""); // Preselect variantId for editing
-        setValue("skuId", stockQuantity?.skuId || ""); // Preselect skuId for editing
-      }
+  const handleProductSelect = (index: number, productId: string) => {
+    const selectedProduct = products?.find((p) => p.id === productId);
+    if (selectedProduct) {
+      setSelectedVariants((prev) => ({ ...prev, [index]: selectedProduct.variants || [] }));
+      setSelectedSKUs((prev) => ({ ...prev, [index]: [] }));
+      setValue(`items.${index}.productId`, productId);
+      setValue(`items.${index}.variantId`, "");
+      setValue(`items.${index}.skuId`, "");
     }
-  }, [watchProductId, products, setValue, stockQuantity]);
+  };
 
-  // Update SKUs when a variant is selected
+  const handleVariantSelect = (index: number, variantId: string) => {
+    const selectedVariant = selectedVariants[index]?.find((variant) => variant.id === variantId);
+    if (selectedVariant) {
+      setSelectedSKUs((prev) => ({ ...prev, [index]: selectedVariant.skus || [] }));
+      setValue(`items.${index}.variantId`, variantId);
+      setValue(`items.${index}.skuId`, "");
+    }
+  };
+
+  // Set selected variants and SKUs if in edit mode
   useEffect(() => {
-    if (watchVariantId) {
-      const selectedVariant = selectedVariants.find(
-        (variant) => variant.id === watchVariantId
-      );
-      if (selectedVariant) {
-        setSelectedSKUs(selectedVariant.skus || []);
-        setValue("skuId", stockQuantity?.skuId || ""); // Preselect skuId for editing
+    if (stockQuantity && products) {
+      const product = products.find((p) => p.id === stockQuantity.productId);
+      if (product) {
+        setSelectedVariants({ 0: product.variants || [] });
+        const variant = product.variants.find((v) => v.id === stockQuantity.variantId);
+        if (variant) {
+          setSelectedSKUs({ 0: variant.skus || [] });
+        }
       }
     }
-  }, [watchVariantId, selectedVariants, setValue, stockQuantity]);
+  }, [stockQuantity, products]);
 
   const onSubmit = async (values: z.infer<typeof stockSchema>) => {
     setLoading(true);
     try {
       if (stockQuantity) {
-        // Update stock quantity
+        // Update stock quantity (single item only for edit mode)
+        const item = values.items[0];
         await axios.patch(
           `${API}/admin/product/stock/${stockQuantity.id}`,
-          values
+          {
+            ...item,
+            quantity: item.unit === "boxes" ? item.quantity * 12 : item.quantity,
+          }
         );
         toast.success("Stock updated successfully");
       } else {
-        // Add new stock quantity
-        await axios.post(`${API}/admin/product/stock`, values);
-        toast.success("Stock added successfully");
+        // Add new stock quantities (supports multiple items)
+        for (const item of values.items) {
+          await axios.post(`${API}/admin/product/stock`, {
+            ...item,
+            quantity: item.unit === "boxes" ? item.quantity * 12 : item.quantity,
+          });
+        }
+        const totalItems = values.items.reduce(
+          (sum, item) => sum + (item.unit === "boxes" ? item.quantity * 12 : item.quantity),
+          0
+        );
+        toast.success(`${totalItems} stock items added successfully`);
       }
       router.push("/dashboard/admin/product/stock");
     } catch (error) {
@@ -139,6 +171,12 @@ const StockQuantityForm = ({
       setLoading(false);
     }
   };
+
+  // Prepare product options for react-select
+  const productOptions = products?.map((product) => ({
+    value: product.id,
+    label: product.name,
+  }));
 
   return (
     <div className="container mx-auto my-10 p-6 bg-gray-50 rounded-lg shadow-xl">
@@ -156,139 +194,207 @@ const StockQuantityForm = ({
         <CardContent>
           <Form {...form}>
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-              {/* Product Selection */}
-              <FormField
-                control={control}
-                name="productId"
-                render={() => (
-                  <FormItem>
-                    <FormLabel>Product</FormLabel>
-                    <Controller
-                      name="productId"
-                      control={control}
-                      render={({ field }) => (
-                        <Select
-                          {...field}
-                          value={products
-                            ?.filter((product) => product.id === field.value)
-                            .map((product) => ({
-                              value: product.id,
-                              label: product.name,
-                            }))[0] || null}
-                          options={
-                            products?.map((product) => ({
-                              value: product.id,
-                              label: product.name,
-                            })) || []
-                          }
-                          onChange={(option) => {
-                            field.onChange(option?.value || "");
-                          }}
-                          placeholder="Select a product"
-                          isLoading={loadingProducts}
-                        />
+              <div className="overflow-x-auto">
+                <table className="min-w-full bg-white border border-gray-200 rounded-md">
+                  <thead className="bg-gray-100 text-gray-600 uppercase text-xs leading-normal">
+                    <tr>
+                      <th className="py-3 px-4 text-left">Product</th>
+                      <th className="py-3 px-4 text-left">Variant</th>
+                      <th className="py-3 px-4 text-left">SKU</th>
+                      <th className="py-3 px-4 text-left">Quantity</th>
+                      <th className="py-3 px-4 text-left">Unit</th>
+                      {!stockQuantity && (
+                        <th className="py-3 px-4 text-center">Remove</th>
                       )}
-                    />
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {fields.map((field, index) => (
+                      <tr key={field.id} className={index % 2 === 0 ? "bg-gray-50" : "bg-white"}>
+                        <td className="p-3 border">
+                          <FormField
+                            control={control}
+                            name={`items.${index}.productId`}
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormControl>
+                                  <Controller
+                                    name={`items.${index}.productId`}
+                                    control={control}
+                                    render={({ field }) => (
+                                      <ReactSelect
+                                        {...field}
+                                        options={productOptions}
+                                        onChange={(selectedOption) => {
+                                          field.onChange(selectedOption?.value || "");
+                                          handleProductSelect(index, selectedOption?.value || "");
+                                        }}
+                                        value={
+                                          productOptions?.find(
+                                            (option) => option.value === field.value
+                                          ) || null
+                                        }
+                                        placeholder="Select Product"
+                                        isClearable
+                                        isLoading={loadingProducts}
+                                        styles={{
+                                          control: (provided) => ({
+                                            ...provided,
+                                            minHeight: "40px",
+                                            borderColor: "rgb(209 213 219)",
+                                            borderRadius: "0.375rem",
+                                          }),
+                                          menu: (provided) => ({
+                                            ...provided,
+                                            zIndex: 9999,
+                                          }),
+                                        }}
+                                      />
+                                    )}
+                                  />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        </td>
 
-              {/* Variant Selection */}
-              <FormField
-                control={control}
-                name="variantId"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Variant</FormLabel>
-                    <Controller
-                      name="variantId"
-                      control={control}
-                      render={({ field }) => (
-                        <Select
-                          {...field}
-                          value={selectedVariants
-                            ?.filter((variant) => variant.id === field.value)
-                            .map((variant) => ({
-                              value: variant.id,
-                              label: variant.color,
-                            }))[0] || null}
-                          options={
-                            selectedVariants.map((variant) => ({
-                              value: variant.id,
-                              label: variant.color,
-                            })) || []
-                          }
-                          onChange={(option) => {
-                            field.onChange(option?.value || "");
-                          }}
-                          placeholder="Select a variant"
-                        />
-                      )}
-                    />
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+                        <td className="p-3 border">
+                          <FormField
+                            control={control}
+                            name={`items.${index}.variantId`}
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormControl>
+                                  <select
+                                    className="w-full border border-gray-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-400"
+                                    value={field.value || ""}
+                                    onChange={(e) => {
+                                      field.onChange(e.target.value);
+                                      handleVariantSelect(index, e.target.value);
+                                    }}
+                                  >
+                                    <option value="">Select Variant</option>
+                                    {selectedVariants[index]?.map((variant) => (
+                                      <option key={variant.id} value={variant.id}>
+                                        {variant.color}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        </td>
 
-              {/* SKU Selection */}
-              <FormField
-                control={control}
-                name="skuId"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>SKU</FormLabel>
-                    <Controller
-                      name="skuId"
-                      control={control}
-                      render={({ field }) => (
-                        <Select
-                          {...field}
-                          value={selectedSKUs
-                            ?.filter((sku) => sku.id === field.value)
-                            .map((sku) => ({
-                              value: sku.id,
-                              label: `${sku.size} (${sku.stockQuantity} in stock)`,
-                            }))[0] || null}
-                          options={
-                            selectedSKUs.map((sku) => ({
-                              value: sku.id,
-                              label: `${sku.size} (${sku.stockQuantity} in stock)`,
-                            })) || []
-                          }
-                          onChange={(option) => {
-                            field.onChange(option?.value || "");
-                          }}
-                          placeholder="Select an SKU"
-                        />
-                      )}
-                    />
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+                        <td className="p-3 border">
+                          <FormField
+                            control={control}
+                            name={`items.${index}.skuId`}
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormControl>
+                                  <select
+                                    className="w-full border border-gray-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-400"
+                                    value={field.value || ""}
+                                    onChange={(e) => field.onChange(e.target.value)}
+                                  >
+                                    <option value="">Select SKU</option>
+                                    {selectedSKUs[index]?.map((sku) => (
+                                      <option key={sku.id} value={sku.id}>
+                                        {sku.size} ({sku.stockQuantity} in stock)
+                                      </option>
+                                    ))}
+                                  </select>
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        </td>
 
-              {/* Quantity Input */}
-              <FormField
-                control={control}
-                name="quantity"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Quantity</FormLabel>
-                    <FormControl>
-                      <Input
-                        type="number"
-                        onWheel={(e) => e.currentTarget.blur()}
-                        placeholder="Enter quantity" {...field}
-                        onChange={(e) =>
-                          field.onChange(parseFloat(e.target.value) || 0)
-                        }
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+                        <td className="p-3 border">
+                          <FormField
+                            control={control}
+                            name={`items.${index}.quantity`}
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormControl>
+                                  <Input
+                                    type="number"
+                                    min="1"
+                                    onWheel={(e) => e.currentTarget.blur()}
+                                    placeholder="Quantity"
+                                    {...field}
+                                    onChange={(e) =>
+                                      field.onChange(parseFloat(e.target.value) || 0)
+                                    }
+                                  />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        </td>
+
+                        <td className="p-3 border">
+                          <FormField
+                            control={control}
+                            name={`items.${index}.unit`}
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormControl>
+                                  <select
+                                    {...field}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                  >
+                                    <option value="pieces">Pieces</option>
+                                    <option value="boxes">Boxes (12 pcs)</option>
+                                  </select>
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        </td>
+
+                        {!stockQuantity && (
+                          <td className="p-3 border text-center">
+                            <button
+                              type="button"
+                              onClick={() => remove(index)}
+                              disabled={fields.length === 1}
+                              className="text-red-500 hover:text-red-600 disabled:text-gray-300 transition"
+                            >
+                              <X className="h-5 w-5" />
+                            </button>
+                          </td>
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {!stockQuantity && (
+                <Button
+                  type="button"
+                  onClick={() =>
+                    append({
+                      productId: "",
+                      variantId: "",
+                      skuId: "",
+                      quantity: 1,
+                      unit: "pieces",
+                    })
+                  }
+                  className="bg-emerald-500 hover:bg-emerald-600"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Product
+                </Button>
+              )}
 
               <Button type="submit" disabled={loading}>
                 {loading ? (

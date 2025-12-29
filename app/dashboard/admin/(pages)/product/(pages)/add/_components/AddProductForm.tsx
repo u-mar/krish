@@ -39,14 +39,6 @@ const productSchema = z.object({
     z.object({
       id: z.string().optional(),
       color: z.string(),
-      skus: z.array(
-        z.object({
-          id: z.string().optional(),
-          size: z.string(),
-          sku: z.string(),
-          stockQuantity: z.number(),
-        })
-      ),
     })
   ),
 });
@@ -58,7 +50,14 @@ type Variant = {
   updatedAt: Date;
   productId: string;
   color: string;
-  skus: { id: string; size: string; sku: string; stockQuantity: number }[];
+  skus: { 
+    id: string; 
+    size: string; 
+    sku: string; 
+    stockQuantity: number;
+    shopInventory?: any[];
+    storeInventory?: any[];
+  }[];
 };
 
 type ProductWithVariants = Product & {
@@ -97,15 +96,15 @@ const AddProductForm = ({ product }: { product?: ProductWithVariants }) => {
       categoryId: product?.categoryId || "",
       description: product?.description || "",
       variants:
-        product?.variants.map((variant) => ({
+        product?.variants?.map((variant) => ({
           id: variant.id || "", // Ensure id is included
-          color: variant.color,
-          skus: variant.skus.map((sku) => ({
+          color: variant.color || "",
+          skus: variant.skus?.map((sku) => ({
             id: sku.id || "", // Ensure sku id is included
-            size: sku.size,
-            sku: sku.sku,
-            stockQuantity: sku.stockQuantity,
-          })),
+            size: sku.size || "",
+            sku: sku.sku || "",
+            stockQuantity: sku.stockQuantity || 0,
+          })) || [],
         })) || [],
     },
   });
@@ -138,16 +137,6 @@ const AddProductForm = ({ product }: { product?: ProductWithVariants }) => {
 
     // Check if we are editing an existing product
     const isEditing = !!product;
-
-    // Iterate over the variants and their SKUs
-    values.variants.forEach((variant) => {
-      variant.skus.forEach((sku, index) => {
-        // If SKU doesn't exist (newly added), generate a new SKU
-        if (!sku.sku || !sku.id) {
-          sku.sku = generateUniqueSKU(values.name, variant.color, sku.size);
-        }
-      });
-    });
 
 
     setLoading(true);
@@ -271,21 +260,11 @@ const AddProductForm = ({ product }: { product?: ProductWithVariants }) => {
                               placeholder="Enter variant color"
                               {...field}
                               ref={firstVariantColorRef}
-                              onKeyDown={(e) => handleEnterPress(e, firstVariantSizeRef)}
                             />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
                       )}
-                    />
-
-                    {/* SKUs within the variant */}
-                    <SKUsFieldArray
-                      control={form.control}
-                      variantIndex={variantIndex}
-                      firstVariantSizeRef={firstVariantSizeRef}
-                      firstVariantStockQuantityRef={firstVariantStockQuantityRef}
-                      isEditing={!!product} // If product exists, we're editing
                     />
 
                     {/* Remove Variant Button */}
@@ -306,9 +285,8 @@ const AddProductForm = ({ product }: { product?: ProductWithVariants }) => {
                   type="button"
                   onClick={() =>
                     appendVariant({
-                      id: "", // Add the id property here
+                      id: "",
                       color: "",
-                      skus: [{ id: "", size: "", sku: "", stockQuantity: 0 }],
                     })
                   }
                   className="flex items-center space-x-2 bg-blue-600 text-white hover:bg-blue-700"

@@ -7,7 +7,7 @@ import { API } from '@/lib/config';
 
 ChartJS.register(ArcElement, Tooltip, Legend);
 
-const ProfitByCategory = () => {
+const ProfitByCategory = ({ selectedLocation }: { selectedLocation?: string }) => {
   const [period, setPeriod] = useState('this_year');
   const [chartData, setChartData] = useState<any>(null);
   const [totalProfit, setTotalProfit] = useState<number>(0);
@@ -28,8 +28,11 @@ const ProfitByCategory = () => {
   const fetchData = async (selectedPeriod: string) => {
     setLoading(true);
     try {
+      const locationParam = selectedLocation && selectedLocation !== 'all' 
+        ? `&location=${selectedLocation}` 
+        : '';
       const response = await axios.get(
-        `${API}/superAdmin/dashboard/profit-by-category?period=${selectedPeriod}`
+        `${API}/superAdmin/dashboard/profit-by-category?period=${selectedPeriod}${locationParam}`
       );
       const apiData = response.data;
 
@@ -80,7 +83,7 @@ const ProfitByCategory = () => {
 
   useEffect(() => {
     fetchData(period);
-  }, [period]);
+  }, [period, selectedLocation]);
 
   const options = {
     cutout: '70%', // Creates the "donut" effect

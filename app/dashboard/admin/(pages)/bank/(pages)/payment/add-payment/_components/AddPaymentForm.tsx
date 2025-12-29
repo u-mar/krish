@@ -28,11 +28,31 @@ const AddPaymentForm = ({ bankTransaction }: { bankTransaction?: BankTransaction
   const router = useRouter();
   const queryClient = useQueryClient();
   const [loading, setLoading] = useState(false);
+  const [accountId, setAccountId] = useState<string>("");
 
   // Extract bankAccountId and acc from URL
   const searchParams = useSearchParams();
   const bankAccountId = searchParams.get("bankAccountId") || undefined;
   const acc = searchParams.get("acc") || undefined;
+
+  // Fetch first account on mount
+  useEffect(() => {
+    const fetchAccount = async () => {
+      try {
+        const response = await axios.get(`${API}/admin/account`);
+        if (response.data && response.data.length > 0) {
+          setAccountId(response.data[0].id);
+        }
+      } catch (error) {
+        console.error("Error fetching account:", error);
+      }
+    };
+    if (!bankTransaction) {
+      fetchAccount();
+    } else {
+      setAccountId(bankTransaction.accountId);
+    }
+  }, [bankTransaction]);
 
   // Ensure acc and bankAccountId are available
   useEffect(() => {
@@ -47,13 +67,20 @@ const AddPaymentForm = ({ bankTransaction }: { bankTransaction?: BankTransaction
     resolver: zodResolver(bankTransactionSchema),
     defaultValues: {
       bankAccountId: bankTransaction?.bankAccountId || bankAccountId,
-      acc: bankTransaction?.acc || (acc === "credit" ? "cr" : "dr"), // Use 'cr' for credit and 'dr' for debit
+      acc: bankTransaction?.acc || (acc === "credit" ? "cr" : "dr"),
       accountId: bankTransaction?.accountId || "",
       cashBalance: bankTransaction?.cashBalance || 0,
       digitalBalance: bankTransaction?.digitalBalance || 0,
       details: bankTransaction?.details || "",
     },
   });
+
+  // Update accountId when fetched
+  useEffect(() => {
+    if (accountId && !bankTransaction) {
+      form.setValue("accountId", accountId);
+    }
+  }, [accountId, bankTransaction, form]);
 
 
   // Prevent scroll on number inputs
@@ -63,12 +90,15 @@ const AddPaymentForm = ({ bankTransaction }: { bankTransaction?: BankTransaction
 
 
   const onSubmit = async (values: z.infer<typeof bankTransactionSchema>) => {
-    const cashAmt = parseFloat(values.cashBalance?.toString() || "0") || 0;
-    const digitalAmt = parseFloat(values.digitalBalance?.toString() || "0") || 0;
-    const totalAmount = cashAmt + digitalAmt;
+    const amount = parseFloat(values.cashBalance?.toString() || "0") || 0;
 
-    if (totalAmount <= 0) {
-      toast.error("Total payment amount must be greater than zero");
+    if (amount <= 0) {
+      toast.error("Amount must be greater than zero");
+      return;
+    }
+
+    if (!values.accountId) {
+      toast.error("Account not loaded. Please wait or refresh the page.");
       return;
     }
 
@@ -77,17 +107,17 @@ const AddPaymentForm = ({ bankTransaction }: { bankTransaction?: BankTransaction
       if (bankTransaction) {
         await axios.patch(`${API}/admin/bankTransaction/${bankTransaction.id}`, {
           ...values,
-          cashBalance: cashAmt,
-          digitalBalance: digitalAmt,
+          cashBalance: amount,
+          digitalBalance: 0,
         });
-        toast.success(`Successfully Updated ${acc || bankTransaction?.acc == 'cr' ? 'Credit' : 'Debit'} Payment`);
+        toast.success(`Successfully Updated Debt`);
       } else {
         await axios.post(`${API}/admin/bankTransaction`, {
           ...values,
-          cashBalance: cashAmt,
-          digitalBalance: digitalAmt,
+          cashBalance: amount,
+          digitalBalance: 0,
         });
-        toast.success(`Successfully Created ${acc}`);
+        toast.success(`Successfully Created Debt`);
       }
 
       queryClient.invalidateQueries({ queryKey: ["bankPayment"] });
@@ -105,75 +135,46 @@ const AddPaymentForm = ({ bankTransaction }: { bankTransaction?: BankTransaction
       <Card className="max-w-4xl mx-auto my-10 p-6 shadow-lg rounded-lg bg-white">
         <CardHeader className="mb-6">
           <CardTitle className="text-2xl font-bold text-gray-700">
-            {bankTransaction ? `Edit ${acc || bankTransaction.acc == 'cr' ? 'Credit' : 'Debit'} Payment` : `Add ${acc == 'credit' ? 'Credit' : 'Debit'} Payment`}
+            {bankTransaction ? `Edit Debt` : `Add Debt`}
           </CardTitle>
         </CardHeader>
         <CardContent>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Cash Amount */}
-                <FormField
-                  control={form.control}
-                  name="cashBalance"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Cash Amount</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="number"
-                          step="any" // Allows decimal numbers
-                          placeholder="Enter cash amount"
-                          {...field}
-                          onWheel={handleWheel}
-                          onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                {/* Digital Amount */}
-                <FormField
-                  control={form.control}
-                  name="digitalBalance"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Digital Amount</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="number"
-                          step="any" // Allows decimal numbers
-                          placeholder="Enter digital amount"
-                          {...field}
-                          onWheel={handleWheel}
-                          onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-              {/* Account ID */}
-              <FormField
-                control={form.control}
-                name="accountId"
-                render={() => <AccountIdSelect control={form.control} setValue={form.setValue} initialAccountId={bankTransaction?.accountId} />}
-              />
-              {/* Details */}
+              {/* Details - First */}
               <FormField
                 control={form.control}
                 name="details"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Payment Details</FormLabel>
+                    <FormLabel>Details</FormLabel>
                     <FormControl>
                       <Input
                         type="text"
-                        placeholder="Enter payment details (optional)"
+                        placeholder="Enter debt details (optional)"
                         {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
+              {/* Amount - Single Field */}
+              <FormField
+                control={form.control}
+                name="cashBalance"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Amount</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        step="any"
+                        placeholder="Enter amount"
+                        {...field}
+                        onWheel={handleWheel}
+                        onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
                       />
                     </FormControl>
                     <FormMessage />

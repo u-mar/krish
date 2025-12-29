@@ -62,6 +62,7 @@ model User {
   transaction    Transaction[]
   bankAccount    BankAccount[] // Relation to BankAccount model
   accountSwaps   AccountSwap[]
+  transfers      ProductTransfer[] // Product transfers made by user
 }
 
 model Category {
@@ -73,18 +74,24 @@ model Category {
 }
 
 model Product {
-  id              String          @id @default(auto()) @map("_id") @db.ObjectId
+  id              String                @id @default(auto()) @map("_id") @db.ObjectId
   name            String
-  categoryId      String          @db.ObjectId
-  category        Category        @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  categoryId      String                @db.ObjectId
+  category        Category              @relation(fields: [categoryId], references: [id], onDelete: Cascade)
   price           Float
   description     String
   stockQuantity   Int
   variants        Variant[] // Relation to product variants
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
   orderItem       SellItem[]
   stockQuantities StockQuantity[]
+  storeInventory  StoreInventory[] // Inventory in stores
+  shopInventory   ShopInventory[] // Inventory in shops
+
+  @@index([categoryId])
+  @@index([createdAt])
+  @@index([stockQuantity])
 }
 
 model StockQuantity {
@@ -112,16 +119,19 @@ model Variant {
 }
 
 model SKU {
-  id              String          @id @default(auto()) @map("_id") @db.ObjectId
-  variantId       String          @db.ObjectId
-  variant         Variant         @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  id              String            @id @default(auto()) @map("_id") @db.ObjectId
+  variantId       String            @db.ObjectId
+  variant         Variant           @relation(fields: [variantId], references: [id], onDelete: Cascade)
   size            String
-  sku             String          @unique
+  sku             String            @unique
   stockQuantity   Int // Stock quantity specific to this SKU
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
   sellItem        SellItem[]
   stockQuantities StockQuantity[]
+  storeInventory  StoreInventory[] // Track in stores
+  shopInventory   ShopInventory[] // Track in shops
+  transfers       ProductTransfer[] // Transfer history
 }
 
 model SellItem {
@@ -138,7 +148,7 @@ model SellItem {
 
 model Sell {
   id            String     @id @default(auto()) @map("_id") @db.ObjectId
-  orderId       String?    @unique // Unique order identifier (e.g., ORD-0001)
+  orderId       String? // Order identifier (e.g., ORD-0001)
   userId        String     @db.ObjectId
   user          User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   items         SellItem[]
@@ -152,8 +162,15 @@ model Sell {
   customer      Customer?  @relation(fields: [customerId], references: [id], onDelete: Cascade)
   accountId     String     @db.ObjectId // New field to link to Accounts
   account       Accounts   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  shopId        String?    @db.ObjectId // Track which shop the sale came from
+  shop          Shop?      @relation(fields: [shopId], references: [id], onDelete: SetNull)
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt
+
+  @@index([shopId])
+  @@index([createdAt])
+  @@index([userId])
+  @@index([accountId])
 }
 
 enum Type {
@@ -222,6 +239,12 @@ model Transaction {
   senderPhone   String? // Phone number of the sender
   receiverName  String? // Name of the person receiving the money
   receiverPhone String? // Phone number of the receiver
+
+  @@index([userId])
+  @@index([accountId])
+  @@index([categoryId])
+  @@index([createdAt])
+  @@index([tranDate])
 }
 
 enum exchangeType {
@@ -271,6 +294,7 @@ model BankTransaction {
   cashBalance    Float       @default(0.0) // Balance for cash debts
   digitalBalance Float       @default(0.0) // Balance for digital debts
   amount         Float // Amount of the transaction
+  amountPaid     Float       @default(0.0) // Amount paid towards the debt
   acc            AccType // Type of the transaction (cash or digital)
   createdAt      DateTime    @default(now())
   updatedAt      DateTime    @updatedAt
@@ -310,4 +334,91 @@ model AccountSwap {
   details   String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// Store model - main storage locations
+model Store {
+  id            String            @id @default(auto()) @map("_id") @db.ObjectId
+  name          String            @unique // e.g., "Store A", "Store B"
+  description   String?
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  inventory     StoreInventory[] // Products in this store
+  transfersFrom ProductTransfer[] @relation("TransferFromStore")
+  transfersTo   ProductTransfer[] @relation("TransferToStore")
+}
+
+// Shop model - retail/sales locations
+model Shop {
+  id            String            @id @default(auto()) @map("_id") @db.ObjectId
+  name          String            @unique // e.g., "Shop A", "Shop B"
+  description   String?
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  inventory     ShopInventory[] // Products in this shop
+  sells         Sell[] // Sales from this shop
+  transfersFrom ProductTransfer[] @relation("TransferFromShopSource")
+  transfersTo   ProductTransfer[] @relation("TransferToShop")
+}
+
+// Store inventory tracking
+model StoreInventory {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  storeId   String   @db.ObjectId
+  store     Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  productId String   @db.ObjectId
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  skuId     String   @db.ObjectId
+  sku       SKU      @relation(fields: [skuId], references: [id], onDelete: Cascade)
+  quantity  Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([storeId, skuId])
+}
+
+// Shop inventory tracking
+model ShopInventory {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  shopId    String   @db.ObjectId
+  shop      Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  productId String   @db.ObjectId
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  skuId     String   @db.ObjectId
+  sku       SKU      @relation(fields: [skuId], references: [id], onDelete: Cascade)
+  quantity  Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([shopId, skuId])
+}
+
+// Product transfer between stores and shops
+model ProductTransfer {
+  id           String       @id @default(auto()) @map("_id") @db.ObjectId
+  fromType     LocationType // "store" or "shop"
+  fromStoreId  String?      @db.ObjectId
+  fromStore    Store?       @relation("TransferFromStore", fields: [fromStoreId], references: [id], onDelete: Cascade)
+  fromShopId   String?      @db.ObjectId
+  fromShop     Shop?        @relation("TransferFromShopSource", fields: [fromShopId], references: [id], onDelete: Cascade)
+  toType       LocationType // "store" or "shop"
+  toStoreId    String?      @db.ObjectId
+  toStore      Store?       @relation("TransferToStore", fields: [toStoreId], references: [id], onDelete: Cascade)
+  toShopId     String?      @db.ObjectId
+  toShop       Shop?        @relation("TransferToShop", fields: [toShopId], references: [id], onDelete: Cascade)
+  productId    String       @db.ObjectId
+  skuId        String       @db.ObjectId
+  sku          SKU          @relation(fields: [skuId], references: [id], onDelete: Cascade)
+  quantity     Int
+  notes        String?
+  transferDate DateTime     @default(now())
+  userId       String       @db.ObjectId
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+}
+
+enum LocationType {
+  store
+  shop
 }

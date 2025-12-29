@@ -32,12 +32,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Calculate the total stock quantity from all SKUs
+    // Calculate the total stock quantity from all SKUs (if they exist)
     let totalStockQuantity = 0;
     body.variants.forEach((variant: any) => {
-      variant.skus.forEach((sku: any) => {
-        totalStockQuantity += sku.stockQuantity;
-      });
+      if (variant.skus) {
+        variant.skus.forEach((sku: any) => {
+          totalStockQuantity += sku.stockQuantity;
+        });
+      }
     });
 
     // Create the product with the calculated total stock quantity
@@ -51,20 +53,27 @@ export async function POST(request: NextRequest) {
         variants: {
           create: body.variants.map((variant: any) => ({
             color: variant.color,
-            skus: {
-              create: variant.skus.map((sku: any) => ({
-                size: sku.size,
-                sku: sku.sku,
-                stockQuantity: sku.stockQuantity,
-              })),
-            },
+            ...(variant.skus && variant.skus.length > 0 && {
+              skus: {
+                create: variant.skus.map((sku: any) => ({
+                  size: sku.size,
+                  sku: sku.sku,
+                  stockQuantity: sku.stockQuantity,
+                })),
+              },
+            }),
           })),
         },
       },
       include: {
         variants: {
           include: {
-            skus: true,
+            skus: {
+              include: {
+                shopInventory: true,
+                storeInventory: true,
+              },
+            },
           },
         },
       },
@@ -82,12 +91,16 @@ export async function POST(request: NextRequest) {
 
 
 export async function GET(request: NextRequest) {
-
-
   try {
     const products = await prisma.product.findMany({
       orderBy: { createdAt: "desc" },
-      include: {
+      select: {
+        id: true,
+        name: true,
+        price: true,
+        stockQuantity: true,
+        createdAt: true,
+        categoryId: true,
         category: {
           select: {
             id: true,
@@ -95,18 +108,47 @@ export async function GET(request: NextRequest) {
           },
         },
         variants: {
-          include: {
-            skus: true,
+          select: {
+            id: true,
+            color: true,
+            skus: {
+              select: {
+                id: true,
+                size: true,
+                sku: true,
+                stockQuantity: true,
+                shopInventory: {
+                  select: {
+                    id: true,
+                    quantity: true,
+                    shopId: true,
+                  },
+                },
+                storeInventory: {
+                  select: {
+                    id: true,
+                    quantity: true,
+                    storeId: true,
+                  },
+                },
+              },
+            },
           },
         },
-        orderItem: {
+        _count: {
           select: {
-            quantity: true
-          }
-        }
+            orderItem: true,
+          },
+        },
       },
     });
-    return NextResponse.json(products, { status: 200 });
+    
+    return NextResponse.json(products, { 
+      status: 200,
+      headers: {
+        'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=120',
+      },
+    });
   } catch (error) {
     console.error("Error fetching products:", error);
     return NextResponse.json(

@@ -56,6 +56,7 @@ export interface Order {
   status: string;
   type: Type;
   accountId: string;
+  shopId?: string;
   items: OrderItem[];
   cashAmount?: number;
   digitalAmount?: number;
@@ -70,13 +71,14 @@ interface FormValues {
     skuId?: string;
     price: number;
     quantity: number;
+    unit: "pieces" | "boxes";
     stock?: number;
   }[];
   status: string;
   type: Type;
   accountId: string;
-  cashAmount?: number;
-  digitalAmount?: number;
+  shopId?: string;
+  amountPaid?: number;
 }
 
 const AddOrderForm: React.FC<{ order?: Order }> = ({ order }) => {
@@ -107,27 +109,26 @@ const AddOrderForm: React.FC<{ order?: Order }> = ({ order }) => {
           skuId: item.skuId,
           price: item.price,
           quantity: item.quantity,
+          unit: "pieces" as "pieces" | "boxes",
           stock: item.sku.stockQuantity,
         })),
         status: order.status,
         type: "both",
         accountId: order.accountId || "",
-        cashAmount: order.cashAmount || undefined,
-        digitalAmount: order.digitalAmount || undefined,
+        shopId: order.shopId || "",
       }
       : {
-        products: [{ productId: "", name: "", price: 0, quantity: 1 }],
+        products: [{ productId: "", name: "", price: 0, quantity: 1, unit: "pieces" as "pieces" | "boxes" }],
         status: "paid",
         type: "both",
         accountId: "",
+        shopId: "",
       },
     mode: "onChange",
   });
 
   const { fields, append, remove } = useFieldArray({ control, name: "products" });
   const watchProducts = watch("products");
-  const watchCashAmount = watch("cashAmount");
-  const watchDigitalAmount = watch("digitalAmount");
 
   // Fetch products
   const { data: products } = useQuery({
@@ -145,6 +146,14 @@ const AddOrderForm: React.FC<{ order?: Order }> = ({ order }) => {
     retry: 3,
   });
 
+  // Fetch shops
+  const { data: shops } = useQuery({
+    queryKey: ["shops"],
+    queryFn: () => axios.get(`${API}/employee/shop`).then((res) => res.data),
+    staleTime: 60 * 1000,
+    retry: 3,
+  });
+
   useEffect(() => {
     if (accounts) {
       const defaultAcc = accounts.find((account) => account.default);
@@ -154,17 +163,6 @@ const AddOrderForm: React.FC<{ order?: Order }> = ({ order }) => {
       }
     }
   }, [accounts, setValue]);
-
-  // Automatically update cash/digital to match total
-  useEffect(() => {
-    if (watchCashAmount) {
-      const remainingDigitalAmount = (Number(totalAmount) - Number(watchCashAmount)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-      setValue("digitalAmount", Number(remainingDigitalAmount));
-    } else if (watchDigitalAmount) {
-      const remainingCashAmount = (Number(totalAmount) - Number(watchDigitalAmount)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-      setValue("cashAmount", Number(remainingCashAmount));
-    }
-  }, [watchCashAmount, watchDigitalAmount, totalAmount, setValue]);
 
   // Set selected variants and SKUs if in edit mode
   useEffect(() => {
@@ -214,7 +212,10 @@ const AddOrderForm: React.FC<{ order?: Order }> = ({ order }) => {
     const subscription = watch((values) => {
       const total = (values.products ?? [])
         .reduce(
-          (acc, item) => acc + Number(item?.price || 0) * Number(item?.quantity || 0),
+          (acc, item) => {
+            const quantity = item?.unit === "boxes" ? Number(item?.quantity || 0) * 12 : Number(item?.quantity || 0);
+            return acc + Number(item?.price || 0) * quantity;
+          },
           0
         )
         .toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -230,14 +231,10 @@ const AddOrderForm: React.FC<{ order?: Order }> = ({ order }) => {
     const isProductsValid = watchProducts.every(
       (item) => item.productId && item.variantId && item.skuId && item.price > 0 && item.quantity > 0
     );
-    const isCashDigitalValid =
-      Number(watchCashAmount) >= 0 &&
-      Number(watchDigitalAmount) >= 0 &&
-      Number(watchCashAmount) + Number(watchDigitalAmount) === Number(totalAmount);
-    const isFormValid = isProductsValid && isCashDigitalValid && isValid;
+    const isFormValid = isProductsValid && isValid;
 
     setIsSubmitDisabled(!isFormValid);
-  }, [watchProducts, watchCashAmount, watchDigitalAmount, totalAmount, isValid]);
+  }, [watchProducts, totalAmount, isValid]);
 
   const handleWheel = (event: React.WheelEvent<HTMLInputElement>) => {
     event.currentTarget.blur();
@@ -264,13 +261,13 @@ const AddOrderForm: React.FC<{ order?: Order }> = ({ order }) => {
         variantId: item.variantId,
         skuId: item.skuId,
         price: Number(item.price),
-        quantity: Number(item.quantity),
+        quantity: item.unit === "boxes" ? Number(item.quantity) * 12 : Number(item.quantity),
       })),
       status: data.status,
       type: "both",
       accountId: data.accountId,
-      cashAmount: Number(data.cashAmount),
-      digitalAmount: Number(data.digitalAmount),
+      shopId: data.shopId || null,
+      amountPaid: Number(data.amountPaid) || Number(totalAmount),
     };
 
     try {
@@ -311,6 +308,7 @@ const AddOrderForm: React.FC<{ order?: Order }> = ({ order }) => {
                 <th className="py-3 px-6 text-left">SKU</th>
                 <th className="py-3 px-6 text-left">Price</th>
                 <th className="py-3 px-6 text-left">Quantity</th>
+                <th className="py-3 px-6 text-left">Unit</th>
                 <th className="py-3 px-6 text-left">Total</th>
                 <th className="py-3 px-6 text-center">Remove</th>
               </tr>
@@ -409,10 +407,22 @@ const AddOrderForm: React.FC<{ order?: Order }> = ({ order }) => {
                     />
                   </td>
 
+                  <td className="p-4 border">
+                    <select
+                      className="w-full border border-gray-300 rounded-lg p-3 text-base sm:text-sm focus:ring-2 focus:ring-blue-400"
+                      {...register(`products.${index}.unit`)}
+                    >
+                      <option value="pieces">Pieces</option>
+                      <option value="boxes">Boxes (12 pcs)</option>
+                    </select>
+                  </td>
+
                   <td className="p-4 border text-gray-700 text-base sm:text-sm">
                     {(
                       Number(watchProducts[index]?.price || 0) *
-                      Number(watchProducts[index]?.quantity || 0)
+                      (watchProducts[index]?.unit === "boxes" 
+                        ? Number(watchProducts[index]?.quantity || 0) * 12 
+                        : Number(watchProducts[index]?.quantity || 0))
                     ).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </td>
 
@@ -438,6 +448,7 @@ const AddOrderForm: React.FC<{ order?: Order }> = ({ order }) => {
                 name: "",
                 price: 0,
                 quantity: 1,
+                unit: "pieces",
                 variantId: "",
                 skuId: "",
                 stock: 0,
@@ -450,72 +461,38 @@ const AddOrderForm: React.FC<{ order?: Order }> = ({ order }) => {
 
         </div>
 
-        {defaultAccount && (
-          <div className="space-y-2 mt-4">
-            <label className="text-gray-700 font-semibold">Select Account</label>
-            <select
-              className="border p-2 rounded-md w-full focus:ring-2 focus:ring-blue-400"
-              value={defaultAccount.id}
-              {...register("accountId")}
-              disabled
-            >
-              <option value={defaultAccount.id}>
-                {defaultAccount.account} (Default)
+        <div className="space-y-2 mt-4">
+          <label className="block text-gray-700 font-semibold mb-2">
+            Shop
+          </label>
+          <select
+            {...register("shopId")}
+            className="border border-gray-300 rounded-md p-2 w-full focus:ring-2 focus:ring-blue-400"
+          >
+            <option value="">Select Shop (Optional)</option>
+            {shops?.map((shop: any) => (
+              <option key={shop.id} value={shop.id}>
+                {shop.name}
               </option>
-            </select>
-          </div>
-        )}
+            ))}
+          </select>
+        </div>
 
-        <div className="flex flex-wrap -mx-2">
-          <div className="w-full md:w-1/2 px-2 mb-4">
-            <label className="block text-gray-700 font-semibold mb-2">
-              Cash Amount
-            </label>
-            <input
-              type="number"
-              step="any" // Allows decimal numbers
-              min="0"
-              max={totalAmount}
-              value={watchCashAmount || ""}
-              onChange={(e) => {
-                let cashAmount = parseFloat(e.target.value);
-                if (isNaN(cashAmount) || cashAmount < 0) cashAmount = 0;
-                const total = totalAmount;
-                if (cashAmount > Number(total)) cashAmount = Number(total);
-                const digitalAmount = Number(total) - cashAmount;
-                setValue("cashAmount", cashAmount);
-                setValue("digitalAmount", digitalAmount);
-              }}
-              className="border border-gray-300 rounded-md p-2 w-full focus:ring-2 focus:ring-blue-400"
-              placeholder="Enter cash amount"
-              onWheel={(e) => e.currentTarget.blur()}
-            />
-          </div>
-
-          <div className="w-full md:w-1/2 px-2 mb-4">
-            <label className="block text-gray-700 font-semibold mb-2">
-              Digital Amount
-            </label>
-            <input
-              type="number"
-              step="any" // Allows decimal numbers
-              min="0"
-              max={totalAmount}
-              value={watchDigitalAmount || ""}
-              onChange={(e) => {
-                let digitalAmount = parseFloat(e.target.value);
-                if (isNaN(digitalAmount) || digitalAmount < 0) digitalAmount = 0;
-                const total = totalAmount;
-                if (digitalAmount > Number(total)) digitalAmount = Number(total);
-                const cashAmount = Number(total) - digitalAmount;
-                setValue("digitalAmount", digitalAmount);
-                setValue("cashAmount", cashAmount);
-              }}
-              className="border border-gray-300 rounded-md p-2 w-full focus:ring-2 focus:ring-blue-400"
-              placeholder="Enter digital amount"
-              onWheel={(e) => e.currentTarget.blur()}
-            />
-          </div>
+        <div className="space-y-2 mt-4">
+          <label className="block text-gray-700 font-semibold mb-2">
+            Amount Paid
+          </label>
+          <input
+            type="number"
+            step="any"
+            min="0"
+            {...register("amountPaid")}
+            placeholder={`Total: ${totalAmount}`}
+            defaultValue={totalAmount}
+            className="border border-gray-300 rounded-md p-2 w-full focus:ring-2 focus:ring-blue-400"
+            onWheel={(e) => e.currentTarget.blur()}
+          />
+          <p className="text-xs text-gray-500">Leave empty to use total amount</p>
         </div>
 
         <div className="text-right mt-4">

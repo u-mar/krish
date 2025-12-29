@@ -16,7 +16,7 @@ import { API } from '@/lib/config';
 
 ChartJS.register(LineElement, CategoryScale, LinearScale, PointElement, Tooltip, Legend);
 
-const OrderSummary = () => {
+const OrderSummary = ({ selectedLocation }: { selectedLocation?: string }) => {
   const [period, setPeriod] = useState('this_month');
   const [chartData, setChartData] = useState<any>(null);
   const [totalProfit, setTotalProfit] = useState<number>(0);
@@ -33,7 +33,10 @@ const OrderSummary = () => {
   const fetchData = async (selectedPeriod: string) => {
     setLoading(true);
     try {
-      const response = await axios.get(`${API}/superAdmin/dashboard/order-summary?period=${selectedPeriod}`);
+      const locationParam = selectedLocation && selectedLocation !== 'all' 
+        ? `&location=${selectedLocation}` 
+        : '';
+      const response = await axios.get(`${API}/superAdmin/dashboard/order-summary?period=${selectedPeriod}${locationParam}`);
       const apiData = response.data;
 
       // Prepare data for the line chart
@@ -63,7 +66,7 @@ const OrderSummary = () => {
 
   useEffect(() => {
     fetchData(period);
-  }, [period]);
+  }, [period, selectedLocation]);
 
   // Chart options to control the layout and styling
   const options = {

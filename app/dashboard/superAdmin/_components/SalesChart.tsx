@@ -7,7 +7,7 @@ import { API } from "@/lib/config";
 
 const ReactApexChart = dynamic(() => import("react-apexcharts"), { ssr: false, loading: () => <p>Loading...</p> });
 
-const SalesChart: React.FC = () => {
+const SalesChart: React.FC<{ selectedLocation?: string }> = ({ selectedLocation }) => {
   const [chartData, setChartData] = useState<any[]>([]);
   const [labels, setLabels] = useState<string[]>([]);
   const [totalRevenue, setTotalRevenue] = useState<number>(0);
@@ -24,8 +24,11 @@ const SalesChart: React.FC = () => {
   const fetchData = async () => {
     setLoading(true);
     try {
+      const locationParam = selectedLocation && selectedLocation !== 'all' 
+        ? `&location=${selectedLocation}` 
+        : '';
       const response = await axios.get(
-        `${API}/superAdmin/dashboard/salesChart?period=${period}`
+        `${API}/superAdmin/dashboard/salesChart?period=${period}${locationParam}`
       );
       const data = response.data;
 
@@ -51,7 +54,7 @@ const SalesChart: React.FC = () => {
 
   useEffect(() => {
     fetchData();
-  }, [period]);
+  }, [period, selectedLocation]);
 
   const options = {
     chart: {

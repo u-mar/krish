@@ -3,50 +3,80 @@ import prisma from "@/prisma/client"; // Adjust the path to your Prisma client f
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    // Fetch all products and their associated SellItems (order items)
-    const products = await prisma.product.findMany({
+    const { searchParams } = new URL(request.url);
+    const location = searchParams.get("location");
+
+    // Build where clause for sells based on location
+    const sellWhereClause: any = {};
+    
+    // Add shop filter if location is specified and not "all"
+    if (location && location !== "all" && location.startsWith("shop-")) {
+      const shopId = location.replace("shop-", "");
+      sellWhereClause.shopId = shopId;
+    }
+
+    // Fetch sells with items based on location filter
+    const sells = await prisma.sell.findMany({
+      where: sellWhereClause,
       include: {
-        orderItem: true, // Includes SellItems associated with each product
+        items: {
+          include: {
+            product: true,
+          },
+        },
       },
     });
 
-    // Calculate metrics for each product
-    const productData = products.map((product) => {
-      const productPrice = product.price;
-
-      // Total quantity sold
-      const quantitySold = product.orderItem.reduce(
-        (sum, item) => sum + item.quantity,
-        0
-      );
-
-      // Total sales value (quantity sold * product price from orderItem)
-      const totalSales = product.orderItem.reduce(
-        (sum, item) => sum + item.price * item.quantity,
-        0
-      );
-
-      // Profit = total sales - cost of sold items (quantity sold * original product price)
-      const profit = totalSales - quantitySold * productPrice;
-
-      return {
-        productName: product.name,
-        productPrice,
-        quantitySold,
-        totalSales,
-        profit,
+    // Aggregate product data from sells
+    const productMetrics: {
+      [productId: string]: {
+        productName: string;
+        productPrice: number;
+        quantitySold: number;
+        totalSales: number;
+        profit: number;
       };
+    } = {};
+
+    sells.forEach((sell) => {
+      sell.items.forEach((item) => {
+        if (!item.product) return;
+
+        const productId = item.productId;
+        const productPrice = item.product.price;
+        const itemSales = item.price * item.quantity;
+        const itemProfit = itemSales - productPrice * item.quantity;
+
+        if (productMetrics[productId]) {
+          productMetrics[productId].quantitySold += item.quantity;
+          productMetrics[productId].totalSales += itemSales;
+          productMetrics[productId].profit += itemProfit;
+        } else {
+          productMetrics[productId] = {
+            productName: item.product.name,
+            productPrice,
+            quantitySold: item.quantity,
+            totalSales: itemSales,
+            profit: itemProfit,
+          };
+        }
+      });
     });
 
-    // Sort products by quantity sold (descending), and then by profit (descending)
-    const sortedProducts = productData
+    // Convert to array and sort
+    const sortedProducts = Object.values(productMetrics)
       .sort((a, b) => b.quantitySold - a.quantitySold || b.profit - a.profit)
       .slice(0, 10); // Take the top 10 products
 
     // Return the top 10 products
-    return NextResponse.json(sortedProducts, { status: 200 });
+    return NextResponse.json(sortedProducts, {
+      status: 200,
+      headers: {
+        'Cache-Control': 'public, s-maxage=30, stale-while-revalidate=60',
+      },
+    });
   } catch (error) {
     console.error("Error fetching top products:", error);
     return NextResponse.json(

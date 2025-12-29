@@ -45,6 +45,7 @@ export async function GET(request: NextRequest) {
         if (!item.product) return;
 
         const productId = item.productId;
+        if (productId == null) return;
         const productPrice = item.product.price;
         const itemSales = item.price * item.quantity;
         const itemProfit = itemSales - productPrice * item.quantity;

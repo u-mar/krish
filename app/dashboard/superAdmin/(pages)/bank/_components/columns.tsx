@@ -157,7 +157,7 @@ export const columns: ColumnDef<Bank>[] = [
               </DropdownMenuItem>
             </Link>
             <DropdownMenuSeparator />
-            <DeleteAlertDialog id={bank.id} type="bank" inDropdown={true} />
+            <DeleteAlertDialog id={bank.id} type="bank" />
           </DropdownMenuContent>
         </DropdownMenu>
       );

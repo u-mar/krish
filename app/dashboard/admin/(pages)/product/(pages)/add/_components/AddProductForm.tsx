@@ -287,6 +287,7 @@ const AddProductForm = ({ product }: { product?: ProductWithVariants }) => {
                     appendVariant({
                       id: "",
                       color: "",
+                      skus: [],
                     })
                   }
                   className="flex items-center space-x-2 bg-blue-600 text-white hover:bg-blue-700"

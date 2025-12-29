@@ -79,7 +79,7 @@ export default function List() {
   }, [data, selectedShop, dateFilter]);
 
   const totalAmount = useMemo(() => {
-    return filteredData.reduce((sum, order: any) => sum + (order.total || 0), 0);
+    return filteredData.reduce((sum: number, order: any) => sum + (order.total || 0), 0);
   }, [filteredData]);
 
   if (isLoading) {

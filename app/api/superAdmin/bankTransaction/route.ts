@@ -23,50 +23,53 @@ export async function POST(request: NextRequest) {
     let accountId = body.accountId;
     if (!accountId || accountId === "default" || accountId.length !== 24) {
       const firstAccount = await prisma.accounts.findFirst();
-      if (!firstAccount) {
-        return NextResponse.json(
-          { error: "No accounts available in the system" },
-          { status: 404 }
-        );
+      if (firstAccount) {
+        accountId = firstAccount.id;
       }
-      accountId = firstAccount.id;
+      // If no account exists, proceed without accountId (it's now optional)
     }
 
-    const account = await prisma.accounts.findUnique({
-      where: { id: accountId },
-    });
+    // Only validate and update account if accountId exists
+    if (accountId) {
+      const account = await prisma.accounts.findUnique({
+        where: { id: accountId },
+      });
 
-    if (!account) {
-      return NextResponse.json(
-        { error: "Account not found" },
-        { status: 404 }
-      );
-    }
+      if (account) {
+        // Adjust balances based on transaction type
+        let newCashBalance = account.cashBalance;
+        let newBalance = account.balance;
 
-    // Adjust balances based on transaction type
-    let newCashBalance = account.cashBalance;
-    let newBalance = account.balance;
+        if (body.acc === "cr") {
+          // Credit: Increase both cash and digital balances based on provided values
+          newCashBalance += body.cashBalance ?? 0;
+          newBalance += body.digitalBalance ?? 0;
+        } else if (body.acc === "dr") {
+          // Debit: Decrease both cash and digital balances based on provided values
+          newCashBalance -= body.cashBalance ?? 0;
+          newBalance -= body.digitalBalance ?? 0;
+        }
 
-    if (body.acc === "cr") {
-      // Credit: Increase both cash and digital balances based on provided values
-      newCashBalance += body.cashBalance ?? 0;
-      newBalance += body.digitalBalance ?? 0;
-    } else if (body.acc === "dr") {
-      // Debit: Decrease both cash and digital balances based on provided values
-      newCashBalance -= body.cashBalance ?? 0;
-      newBalance -= body.digitalBalance ?? 0;
-    } else {
-      return NextResponse.json(
-        { error: "Invalid transaction type (acc). Must be 'cr' or 'dr'." },
-        { status: 400 }
-      );
+        // Update the account with the new balance and cash balance
+        await prisma.accounts.update({
+          where: { id: accountId },
+          data: {
+            cashBalance: newCashBalance,
+            balance: newBalance,
+          },
+        });
+      }
     }
 
     // Create the bank transaction
     const newTransaction = await prisma.bankTransaction.create({
       data: {
-        bankAccountId: body.bankAccountId,
-        accountId: accountId,
+        bankAccount: {
+          connect: { id: body.bankAccountId }
+        },
+        account: accountId ? {
+          connect: { id: accountId }
+        } : undefined,
         cashBalance: body.cashBalance ?? 0.0,
         digitalBalance: body.digitalBalance ?? 0.0,
         details: body.details,
@@ -76,14 +79,7 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Update the account with the new balance and cash balance
-    await prisma.accounts.update({
-      where: { id: accountId },
-      data: {
-        cashBalance: newCashBalance,
-        balance: newBalance,
-      },
-    });
+    // Note: Wallet is updated when payments are received, not when debts are created
 
     return NextResponse.json(newTransaction, { status: 201 });
   } catch (error: any) {

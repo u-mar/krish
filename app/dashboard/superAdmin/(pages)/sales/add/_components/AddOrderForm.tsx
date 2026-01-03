@@ -43,19 +43,10 @@ interface OrderItem {
   sku: SKU;
 }
 
-interface Account {
-  id: string;
-  account: string;
-  balance: number;
-  cashBalance: number;
-  default: boolean;
-}
-
 export interface Order {
   id: string;
   status: string;
   type: Type;
-  accountId: string;
   shopId?: string;
   items: OrderItem[];
   cashAmount?: number;
@@ -76,18 +67,28 @@ interface FormValues {
   }[];
   status: string;
   type: Type;
-  accountId: string;
   shopId?: string;
-  amountPaid?: number;
+  isDebt?: boolean;
+  bankAccountId?: string;
+  cashAmount?: number;
+  digitalAmount?: number;
 }
 
 const AddOrderForm: React.FC<{ order?: Order }> = ({ order }) => {
   const [selectedVariants, setSelectedVariants] = useState<{ [key: number]: Variant[] }>({});
   const [selectedSkus, setSelectedSkus] = useState<{ [key: number]: SKU[] }>({});
+
+  // Debug selectedVariants changes
+  useEffect(() => {
+    console.log('🔵 [ORDER FORM] selectedVariants updated:', selectedVariants);
+  }, [selectedVariants]);
+
+  useEffect(() => {
+    console.log('🔵 [ORDER FORM] selectedSkus updated:', selectedSkus);
+  }, [selectedSkus]);
   const [loading, setLoading] = useState<boolean>(false);
   const [totalAmount, setTotalAmount] = useState<string>("0.00");
   const [isSubmitDisabled, setIsSubmitDisabled] = useState<boolean>(true);
-  const [defaultAccount, setDefaultAccount] = useState<Account | null>(null);
   const queryClient = useQueryClient();
   const router = useRouter();
 
@@ -97,7 +98,7 @@ const AddOrderForm: React.FC<{ order?: Order }> = ({ order }) => {
     handleSubmit,
     watch,
     setValue,
-    formState: { isValid },
+    formState: { isValid, errors },
   } = useForm<FormValues>({
     defaultValues: order
       ? {
@@ -114,15 +115,19 @@ const AddOrderForm: React.FC<{ order?: Order }> = ({ order }) => {
         })),
         status: order.status,
         type: "both",
-        accountId: order.accountId || "",
         shopId: order.shopId || "",
+        cashAmount: order.cashAmount || 0,
+        digitalAmount: order.digitalAmount || 0,
       }
       : {
-        products: [{ productId: "", name: "", price: 0, quantity: 1, unit: "pieces" as "pieces" | "boxes" }],
+        products: [{ productId: "", name: "", variantId: "", skuId: "", price: 0, quantity: 1, unit: "pieces" as "pieces" | "boxes" }],
         status: "paid",
         type: "both",
-        accountId: "",
         shopId: "",
+        isDebt: false,
+        bankAccountId: "",
+        cashAmount: 0,
+        digitalAmount: 0,
       },
     mode: "onChange",
   });
@@ -133,15 +138,16 @@ const AddOrderForm: React.FC<{ order?: Order }> = ({ order }) => {
   // Fetch products
   const { data: products } = useQuery({
     queryKey: ["superAdminSellProduct"],
-    queryFn: () => axios.get<ProductWithVariants[]>(`${API}/superAdmin/product`).then((res) => res.data),
-    staleTime: 60 * 1000,
-    retry: 3,
-  });
-
-  // Fetch accounts and set default account if available
-  const { data: accounts } = useQuery({
-    queryKey: ["superAdminSellAccounts"],
-    queryFn: () => axios.get<Account[]>(`${API}/superAdmin/account`).then((res) => res.data),
+    queryFn: async () => {
+      console.log('🔵 [ORDER FORM] Fetching products...');
+      const response = await axios.get<ProductWithVariants[]>(`${API}/superAdmin/product`);
+      console.log('🔵 [ORDER FORM] Products fetched:', response.data?.length || 0);
+      if (response.data && response.data.length > 0) {
+        console.log('🔵 [ORDER FORM] First product sample:', response.data[0]);
+        console.log('🔵 [ORDER FORM] First product variants:', response.data[0]?.variants);
+      }
+      return response.data;
+    },
     staleTime: 60 * 1000,
     retry: 3,
   });
@@ -154,15 +160,13 @@ const AddOrderForm: React.FC<{ order?: Order }> = ({ order }) => {
     retry: 3,
   });
 
-  useEffect(() => {
-    if (accounts) {
-      const defaultAcc = accounts.find((account) => account.default);
-      if (defaultAcc) {
-        setDefaultAccount(defaultAcc);
-        setValue("accountId", defaultAcc.id);
-      }
-    }
-  }, [accounts, setValue]);
+  // Fetch customers
+  const { data: customers } = useQuery({
+    queryKey: ["customers"],
+    queryFn: () => axios.get(`${API}/superAdmin/bank`).then((res) => res.data),
+    staleTime: 60 * 1000,
+    retry: 3,
+  });
 
   // Set selected variants and SKUs if in edit mode
   useEffect(() => {
@@ -181,24 +185,62 @@ const AddOrderForm: React.FC<{ order?: Order }> = ({ order }) => {
   }, [order, products]);
 
   const handleProductSelect = (index: number, productId: string | null) => {
+    console.log('🔵 [ORDER FORM] Product selected at index:', index, 'productId:', productId);
     const selectedProduct = products?.find((p) => p.id === productId);
+    console.log('🔵 [ORDER FORM] Selected product:', selectedProduct);
+    console.log('🔵 [ORDER FORM] Product variants:', selectedProduct?.variants);
+    
     if (selectedProduct) {
+      console.log('🔵 [ORDER FORM] Setting variants for index', index, ':', selectedProduct.variants);
       setSelectedVariants((prev) => ({ ...prev, [index]: selectedProduct.variants }));
       setSelectedSkus((prev) => ({ ...prev, [index]: [] }));
       setValue(`products.${index}.productId`, productId);
       setValue(`products.${index}.variantId`, "");
       setValue(`products.${index}.skuId`, "");
       setValue(`products.${index}.price`, selectedProduct.price);
+      console.log('✅ [ORDER FORM] Product setup complete');
+    } else {
+      console.warn('⚠️ [ORDER FORM] Product not found');
     }
   };
 
   const handleVariantSelect = (index: number, variantId: string) => {
+    console.log('🔵 [ORDER FORM] Variant selected at index:', index, 'variantId:', variantId);
+    console.log('🔵 [ORDER FORM] Current watchProducts:', watchProducts[index]);
+    console.log('🔵 [ORDER FORM] Available products:', products?.length);
+    
     const selectedProduct = products?.find((p) => p.id === watchProducts[index].productId);
+    console.log('🔵 [ORDER FORM] Found product:', selectedProduct);
+    
     const selectedVariant = selectedProduct?.variants.find((variant) => variant.id === variantId);
+    console.log('🔵 [ORDER FORM] Found variant:', selectedVariant);
+    console.log('🔵 [ORDER FORM] Variant SKUs:', selectedVariant?.skus);
+    
     if (selectedVariant) {
-      setSelectedSkus((prev) => ({ ...prev, [index]: selectedVariant.skus }));
+      // Always set the variant ID
       setValue(`products.${index}.variantId`, variantId);
-      setValue(`products.${index}.skuId`, "");
+      console.log('✅ [ORDER FORM] Variant ID set:', variantId);
+      
+      // If SKUs exist, auto-select the first one
+      if (selectedVariant.skus && selectedVariant.skus.length > 0) {
+        console.log('🔵 [ORDER FORM] Setting SKUs for index', index, ':', selectedVariant.skus);
+        setSelectedSkus((prev) => ({ ...prev, [index]: selectedVariant.skus }));
+        
+        // Auto-select first SKU
+        const firstSku = selectedVariant.skus[0];
+        console.log('🔵 [ORDER FORM] Auto-selecting first SKU:', firstSku);
+        setValue(`products.${index}.skuId`, firstSku.id);
+        setValue(`products.${index}.stock`, firstSku.stockQuantity);
+      } else {
+        console.log('⚠️ [ORDER FORM] No SKUs available, variant set without SKU');
+        setSelectedSkus((prev) => ({ ...prev, [index]: [] }));
+        setValue(`products.${index}.skuId`, "");
+        setValue(`products.${index}.stock`, 0);
+      }
+      console.log('✅ [ORDER FORM] Variant setup complete');
+    } else {
+      console.error('❌ [ORDER FORM] Variant not found');
+      console.log('🔵 [ORDER FORM] selectedVariant:', selectedVariant);
     }
   };
 
@@ -229,7 +271,7 @@ const AddOrderForm: React.FC<{ order?: Order }> = ({ order }) => {
   // Validate form fields and conditions for submit button
   useEffect(() => {
     const isProductsValid = watchProducts.every(
-      (item) => item.productId && item.variantId && item.skuId && item.price > 0 && item.quantity > 0
+      (item) => item.productId && item.variantId && item.price > 0 && item.quantity > 0
     );
     const isFormValid = isProductsValid && isValid;
 
@@ -241,18 +283,11 @@ const AddOrderForm: React.FC<{ order?: Order }> = ({ order }) => {
   };
 
   const onSubmit: SubmitHandler<FormValues> = async (data) => {
-    const outOfStockItems = data.products.filter(
-      (item) => item.quantity > (item.stock || 0)
-    );
-
-    if (outOfStockItems.length > 0) {
-      outOfStockItems.forEach((item) => {
-        toast.error(
-          `Not enough stock for ${item.name}. Available: ${item.stock}, Requested: ${item.quantity}`
-        );
-      });
-      return;
-    }
+    // Remove client-side stock validation since we're now checking shop inventory on the server
+    // The server will validate actual shop inventory based on variants
+    
+    console.log('🔵 [ORDER FORM] Submitting order with data:', data);
+    
     setLoading(true);
     const orderData = {
       items: data.products.map((item) => ({
@@ -265,10 +300,14 @@ const AddOrderForm: React.FC<{ order?: Order }> = ({ order }) => {
       })),
       status: data.status,
       type: data.type,
-      accountId: data.accountId || defaultAccount?.id,
       shopId: data.shopId || null,
-      amountPaid: Number(data.amountPaid) || Number(totalAmount),
+      isDebt: data.isDebt || false,
+      customerId: data.bankAccountId || null, // Send as customerId for the API
+      cashAmount: data.isDebt ? 0 : (Number(data.cashAmount) || 0),
+      digitalAmount: data.isDebt ? 0 : (Number(data.digitalAmount) || 0),
     };
+    
+    console.log('🔵 [ORDER FORM] Prepared orderData:', orderData);
 
     try {
       if (order) {
@@ -284,7 +323,9 @@ const AddOrderForm: React.FC<{ order?: Order }> = ({ order }) => {
       router.push("/dashboard/superAdmin/sales");
     } catch (error: any) {
       setLoading(false);
-      const errorMessage = error.response?.data?.message || "An unexpected error occurred.";
+      console.error('❌ [ORDER FORM] Error submitting order:', error);
+      console.error('❌ [ORDER FORM] Error response:', error.response?.data);
+      const errorMessage = error.response?.data?.error || error.response?.data?.message || error.message || "An unexpected error occurred.";
       toast.error(errorMessage);
     }
   };
@@ -305,7 +346,6 @@ const AddOrderForm: React.FC<{ order?: Order }> = ({ order }) => {
               <tr>
                 <th className="py-3 px-6 text-left">Product</th>
                 <th className="py-3 px-6 text-left">Variant</th>
-                <th className="py-3 px-6 text-left">SKU</th>
                 <th className="py-3 px-6 text-left">Price</th>
                 <th className="py-3 px-6 text-left">Quantity</th>
                 <th className="py-3 px-6 text-left">Unit</th>
@@ -360,30 +400,25 @@ const AddOrderForm: React.FC<{ order?: Order }> = ({ order }) => {
                     <select
                       className="w-full border border-gray-300 rounded-lg p-3 text-base sm:text-sm focus:ring-2 focus:ring-blue-400"
                       value={watchProducts[index]?.variantId || ""}
-                      onChange={(e) => handleVariantSelect(index, e.target.value)}
+                      onChange={(e) => {
+                        console.log('🔵 [ORDER FORM] Variant dropdown changed:', e.target.value);
+                        handleVariantSelect(index, e.target.value);
+                      }}
+                      disabled={!selectedVariants[index] || selectedVariants[index].length === 0}
                     >
                       <option value="">Select Variant</option>
-                      {selectedVariants[index]?.map((variant) => (
-                        <option key={variant.id} value={variant.id}>
-                          {variant.color}
-                        </option>
-                      ))}
+                      {selectedVariants[index]?.map((variant) => {
+                        console.log('🔵 [ORDER FORM] Rendering variant option:', variant.id, variant.color);
+                        return (
+                          <option key={variant.id} value={variant.id}>
+                            {variant.color}
+                          </option>
+                        );
+                      })}
                     </select>
-                  </td>
-
-                  <td className="p-4 border">
-                    <select
-                      className="w-full border border-gray-300 rounded-lg p-3 text-base sm:text-sm focus:ring-2 focus:ring-blue-400"
-                      value={watchProducts[index]?.skuId || ""}
-                      onChange={(e) => handleSkuSelect(index, e.target.value)}
-                    >
-                      <option value="">Select SKU</option>
-                      {selectedSkus[index]?.map((sku) => (
-                        <option key={sku.id} value={sku.id}>
-                          {sku.size} ({sku.stockQuantity} in stock)
-                        </option>
-                      ))}
-                    </select>
+                    {selectedVariants[index] && selectedVariants[index].length === 0 && (
+                      <p className="text-xs text-red-500 mt-1">No variants available for this product</p>
+                    )}
                   </td>
 
                   <td className="p-4 border">
@@ -478,22 +513,75 @@ const AddOrderForm: React.FC<{ order?: Order }> = ({ order }) => {
           </select>
         </div>
 
-        <div className="space-y-2 mt-4">
-          <label className="block text-gray-700 font-semibold mb-2">
-            Amount Paid
-          </label>
+        <div className="mt-4 flex items-center space-x-2 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
           <input
-            type="number"
-            step="any"
-            min="0"
-            {...register("amountPaid")}
-            placeholder={`Total: ${totalAmount}`}
-            defaultValue={totalAmount}
-            className="border border-gray-300 rounded-md p-2 w-full focus:ring-2 focus:ring-blue-400"
-            onWheel={(e) => e.currentTarget.blur()}
+            type="checkbox"
+            id="isDebt"
+            {...register("isDebt")}
+            className="w-4 h-4 text-yellow-600 focus:ring-2 focus:ring-yellow-400 cursor-pointer"
           />
-          <p className="text-xs text-gray-500">Leave empty to use total amount</p>
+          <label htmlFor="isDebt" className="text-gray-700 font-semibold cursor-pointer">
+            📋 This is a debt order (payment will be made later)
+          </label>
         </div>
+
+        {watch("isDebt") && (
+          <div className="mt-4 space-y-2">
+            <label className="block text-gray-700 font-semibold mb-2">
+              👤 Select Customer *
+            </label>
+            <select
+              {...register("bankAccountId", {
+                required: watch("isDebt") ? "Customer is required for debt orders" : false,
+              })}
+              className="border border-gray-300 rounded-md p-2 w-full focus:ring-2 focus:ring-yellow-400"
+            >
+              <option value="">Select a customer</option>
+              {customers?.map((customer: any) => (
+                <option key={customer.id} value={customer.id}>
+                  {customer.name} - {customer.accountNumber}
+                </option>
+              ))}
+            </select>
+            {errors.bankAccountId && (
+              <p className="text-red-500 text-sm">{errors.bankAccountId.message}</p>
+            )}
+          </div>
+        )}
+
+        {!watch("isDebt") && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+            <div className="space-y-2">
+              <label className="block text-gray-700 font-semibold mb-2">
+                💵 Cash Amount Received
+              </label>
+              <input
+                type="number"
+                step="any"
+                min="0"
+                {...register("cashAmount")}
+                placeholder="0.00"
+                className="border border-gray-300 rounded-md p-2 w-full focus:ring-2 focus:ring-green-400"
+                onWheel={(e) => e.currentTarget.blur()}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="block text-gray-700 font-semibold mb-2">
+                💳 Digital Amount Received
+              </label>
+              <input
+                type="number"
+                step="any"
+                min="0"
+                {...register("digitalAmount")}
+                placeholder="0.00"
+                className="border border-gray-300 rounded-md p-2 w-full focus:ring-2 focus:ring-blue-400"
+                onWheel={(e) => e.currentTarget.blur()}
+              />
+            </div>
+          </div>
+        )}
 
         <div className="text-right mt-4">
           <p className="text-lg font-semibold text-gray-800">

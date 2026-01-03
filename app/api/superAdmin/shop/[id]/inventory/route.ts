@@ -24,18 +24,18 @@ export async function POST(
       );
     }
 
-    const { skuId, quantity, items } = body;
+    const { variantId, quantity, items } = body;
     
-    // Support both single item (skuId/quantity) and multiple items (items array)
-    const itemsToProcess = items || [{ skuId, quantity }];
+    // Support both single item (variantId/quantity) and multiple items (items array)
+    const itemsToProcess = items || [{ variantId, quantity }];
     
     console.log("POST /inventory - Shop ID:", params.id, "Items:", itemsToProcess);
 
     // Validate all items
     for (const item of itemsToProcess) {
-      if (!item.skuId || item.quantity === undefined || item.quantity < 0) {
+      if (!item.variantId || item.quantity === undefined || item.quantity < 0) {
         return NextResponse.json(
-          { error: "SKU ID and valid quantity are required for all items" },
+          { error: "Variant ID and valid quantity are required for all items" },
           { status: 400 }
         );
       }
@@ -44,33 +44,29 @@ export async function POST(
     // Process all items
     const results = [];
     for (const item of itemsToProcess) {
-      // Get SKU to find productId
-      const sku = await prisma.sKU.findUnique({
-        where: { id: item.skuId },
-        include: {
-          variant: {
-            select: {
-              productId: true
-            }
-          }
+      // Get variant to find productId
+      const variant = await prisma.variant.findUnique({
+        where: { id: item.variantId },
+        select: {
+          productId: true
         }
       });
 
-      if (!sku) {
+      if (!variant) {
         return NextResponse.json(
-          { error: `SKU ${item.skuId} not found` },
+          { error: `Variant ${item.variantId} not found` },
           { status: 404 }
         );
       }
 
-      const productId = sku.variant.productId;
+      const productId = variant.productId;
 
       // Check if inventory already exists
       const existingInventory = await prisma.shopInventory.findUnique({
         where: {
-          shopId_skuId: {
+          shopId_variantId: {
             shopId: params.id,
-            skuId: item.skuId,
+            variantId: item.variantId,
           },
         },
       });
@@ -80,22 +76,19 @@ export async function POST(
         // Update existing inventory by adding quantity
         inventory = await prisma.shopInventory.update({
           where: {
-            shopId_skuId: {
+            shopId_variantId: {
               shopId: params.id,
-              skuId: item.skuId,
+              variantId: item.variantId,
             },
           },
           data: {
             quantity: existingInventory.quantity + item.quantity,
           },
           include: {
-            sku: {
+            variant: {
               include: {
-                variant: {
-                  include: {
-                    product: true,
-                  },
-                },
+                product: true,
+                skus: true,
               },
             },
           },
@@ -110,19 +103,16 @@ export async function POST(
             product: {
               connect: { id: productId }
             },
-            sku: {
-              connect: { id: item.skuId }
+            variant: {
+              connect: { id: item.variantId }
             },
             quantity: item.quantity,
           },
           include: {
-            sku: {
+            variant: {
               include: {
-                variant: {
-                  include: {
-                    product: true,
-                  },
-                },
+                product: true,
+                skus: true,
               },
             },
           },

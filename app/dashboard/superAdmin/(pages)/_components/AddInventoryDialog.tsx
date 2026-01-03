@@ -76,49 +76,79 @@ export default function AddInventoryDialog({
   // Fetch products with variants and SKUs
   const { data: products } = useQuery<Product[]>({
     queryKey: ["products"],
-    queryFn: () =>
-      axios.get(`${API}/superAdmin/product`).then((res) => res.data),
+    queryFn: async () => {
+      console.log('🔵 [ADD INVENTORY] Fetching products...');
+      const response = await axios.get(`${API}/superAdmin/product`);
+      console.log('🔵 [ADD INVENTORY] Products fetched:', response.data?.length);
+      if (response.data && response.data.length > 0) {
+        console.log('🔵 [ADD INVENTORY] First product sample:', {
+          name: response.data[0]?.name,
+          variants: response.data[0]?.variants?.length,
+          firstVariant: response.data[0]?.variants?.[0],
+        });
+      }
+      return response.data;
+    },
     enabled: open,
   });
 
   const handleProductSelect = (index: number, productId: string | null) => {
+    console.log('🔵 [ADD INVENTORY] Product selected at index', index, ':', productId);
     const selectedProduct = products?.find((p) => p.id === productId);
+    console.log('🔵 [ADD INVENTORY] Found product:', selectedProduct?.name);
+    console.log('🔵 [ADD INVENTORY] Product variants:', selectedProduct?.variants?.length);
+    
     if (selectedProduct) {
       setSelectedVariants((prev) => ({ ...prev, [index]: selectedProduct.variants }));
       setValue(`items.${index}.productId`, productId);
       setValue(`items.${index}.variantId`, "");
+      console.log('✅ [ADD INVENTORY] Product setup complete for index', index);
+    } else {
+      console.warn('⚠️ [ADD INVENTORY] Product not found');
     }
   };
 
   const onSubmit = async (data: FormValues) => {
+    console.log('🔵 [ADD INVENTORY] Form data:', JSON.stringify(data, null, 2));
+    
     // Validate all items
     const invalidItems = data.items.filter(
       (item) => !item.productId || !item.variantId || item.quantity < 1
     );
 
     if (invalidItems.length > 0) {
-      toast.error("Please complete all product selections and enter valid quantities");
+      console.error('❌ [ADD INVENTORY] Invalid items found:', JSON.stringify(invalidItems, null, 2));
+      
+      const missingFields = [];
+      if (invalidItems.some(item => !item.productId)) missingFields.push("Product");
+      if (invalidItems.some(item => !item.variantId)) missingFields.push("Variant");
+      if (invalidItems.some(item => item.quantity < 1)) missingFields.push("Quantity");
+      
+      toast.error(`Please complete: ${missingFields.join(", ")}`);
       return;
     }
 
+    console.log('🔵 [ADD INVENTORY] Submitting to API...');
     setLoading(true);
     try {
-      // Send all items in a single request
+      const payload = {
+        items: data.items.map((item) => ({
+          variantId: item.variantId,
+          quantity: item.unit === "boxes" ? Number(item.quantity) * 12 : Number(item.quantity),
+        })),
+      };
+      console.log('🔵 [ADD INVENTORY] Payload:', payload);
+      
       await axios.post(
         `${API}/superAdmin/${locationType}/${locationId}/inventory`,
-        {
-          items: data.items.map((item) => ({
-            productId: item.productId,
-            variantId: item.variantId,
-            quantity: item.unit === "boxes" ? Number(item.quantity) * 12 : Number(item.quantity),
-          })),
-        }
+        payload
       );
 
       const totalItems = data.items.reduce((sum, item) => sum + Number(item.quantity), 0);
       toast.success(
         `Added ${totalItems} units to ${locationName} successfully`
       );
+      console.log('✅ [ADD INVENTORY] Success');
       queryClient.invalidateQueries({ queryKey: [locationType, locationId] });
       queryClient.invalidateQueries({ queryKey: [`${locationType}s`] });
       
@@ -127,8 +157,9 @@ export default function AddInventoryDialog({
       setSelectedVariants({});
       setOpen(false);
     } catch (error: any) {
+      console.error('❌ [ADD INVENTORY] Error:', error);
       toast.error(
-        error?.response?.data?.error || "Failed to add inventory"
+        error?.response?.data?.error || error?.message || "Failed to add inventory"
       );
     } finally {
       setLoading(false);
@@ -283,6 +314,7 @@ export default function AddInventoryDialog({
                 setOpen(false);
                 reset();
                 setSelectedVariants({});
+                setSelectedSkus({});
               }}
               disabled={loading}
             >

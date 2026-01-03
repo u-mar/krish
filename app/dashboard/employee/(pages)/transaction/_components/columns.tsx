@@ -9,25 +9,12 @@ interface Transaction {
   user: {
     name: string;
   };
-  account: {
-    account: string;
-  };
   amount: number;
-  acc: string;
-  type: string;
+  cashAmount?: number;
+  digitalAmount?: number;
   tranDate: string;
   details: string;
-  amountType: string;
-  category: {
-    name: string;
-  };
   createdAt: string;
-  isExchange?: boolean; // For exchange transactions
-  exchangeType?: string; // For exchangeType transactions
-  senderName?: string; // For exchange - sender's name (if withdrawal)
-  receiverName?: string; // For exchange - receiver's name (if deposit)
-  senderPhone?: string; // For exchange - sender's name (if withdrawal)
-  receiverPhone?: string; // For exchange - receiver's name (if deposit)
 }
 
 export const columns: ColumnDef<Transaction>[] = [
@@ -40,103 +27,33 @@ export const columns: ColumnDef<Transaction>[] = [
   },
   {
     accessorKey: "details",
-    header: "Transaction Details",
+    header: "Expense Details",
     cell: ({ row }) => {
-      if (!row.original.details) {
-        return <span className="text-center">-</span>; // Dash for exchange transactions
-      } else {
-        return <span >{row.original.details}</span>;
-      }
-
+      return <span>{row.original.details || "-"}</span>;
     },
   },
   {
-    accessorKey: "category.name",
-    header: "Category",
+    accessorKey: "cashAmount",
+    header: "💵 Cash",
+    cell: ({ row }) => {
+      const cash = row.original.cashAmount || 0;
+      return <span className="text-green-600 font-medium">{cash.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>;
+    },
+  },
+  {
+    accessorKey: "digitalAmount",
+    header: "💳 Digital",
+    cell: ({ row }) => {
+      const digital = row.original.digitalAmount || 0;
+      return <span className="text-blue-600 font-medium">{digital.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>;
+    },
   },
   {
     accessorKey: "amount",
-    header: "Amount",
+    header: "Total Amount",
     cell: ({ row }) => {
-      const amountType = row.original.amountType;
-      const formattedAmount =
-        amountType === "USD"
-          ? `$${row.original.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-          : row.original.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-      return <span>{formattedAmount}</span>; // Format amount
-    },
-  },
-  {
-    accessorKey: "account.account",
-    header: "Account",
-    cell: ({ row }) => {
-      return <span>{row.original.account.account}</span>;
-    },
-  },
-  {
-    accessorKey: "acc",
-    header: "In/Out",
-    cell: ({ row }) => {
-      if (row.original.isExchange) {
-        return <span>-</span>; // Dash for exchange transactions
-      }
-      const accType = row.original.acc;
-      const color = accType === "Dr" ? "text-red-500" : "text-green-500";
-      const displayText = accType === "Dr" ? "OUT" : "IN";
-      return <span className={color}>{displayText}</span>;
-    },
-  },
-  {
-    accessorKey: "type",
-    header: "Type",
-    cell: ({ row }) => {
-      if (row.original.isExchange) {
-        return <span>-</span>; // Dash for exchange transactions
-      }
-
-      // Conditional logic for displaying type
-      const type = row.original.type;
-      const amountType = row.original.amountType;
-
-      if (type === "cash") {
-        return <span>Cash</span>;
-      } else if (type === "digital") {
-        if (amountType === "KES") {
-          return <span>mPesa</span>; // KES amount type should display mPesa
-        } else if (amountType === "USD") {
-          return <span>EVC</span>; // USD amount type should display EVC
-        }
-      }
-      return <span>-</span>;
-    },
-  },
-  {
-    accessorKey: "exchangeDetails",
-    header: "Exchange Info",
-    cell: ({ row }) => {
-      if (row.original.isExchange) {
-        const isWithdrawal = row.original.exchangeType === "withdrawal";
-        const personName = isWithdrawal
-          ? row.original.senderName || "Sender not provided"
-          : row.original.receiverName || "Receiver not provided";
-        const personPhone = isWithdrawal
-          ? row.original.senderPhone || "-"
-          : row.original.receiverPhone || "-";
-
-        // Apply distinct colors for withdrawal and deposit
-        const exchangeTypeColor = isWithdrawal ? "text-red-500" : "text-green-500";
-        const exchangeTypeText = isWithdrawal ? "Withdrawal" : "Deposit";
-
-        return (
-          <div>
-            <span className={exchangeTypeColor}>
-              {exchangeTypeText}:
-            </span>{" "}
-            {personName} ({personPhone})
-          </div>
-        );
-      }
-      return <span>-</span>; // If it's not an exchange transaction, display a dash
+      const formattedAmount = row.original.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      return <span className="font-semibold text-red-600">{formattedAmount}</span>;
     },
   },
   {

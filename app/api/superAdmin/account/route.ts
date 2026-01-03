@@ -38,27 +38,36 @@ export async function POST(request: NextRequest) {
 }
 
 export async function GET(request: NextRequest) {
-
-  const accounts = await prisma.accounts.findMany({
-    orderBy: { createdAt: "desc" },
-    select: {
-      id: true,
-      account: true,
-      default: true,
-      balance: true,
-      cashBalance: true,
-      createdAt: true,
-      _count: {
-        select: {
-          transactions: true,
+  try {
+    console.log('🔵 [ACCOUNT API] Fetching all accounts...');
+    const accounts = await prisma.accounts.findMany({
+      orderBy: { createdAt: "desc" },
+      select: {
+        id: true,
+        account: true,
+        default: true,
+        balance: true,
+        cashBalance: true,
+        createdAt: true,
+        _count: {
+          select: {
+            transactions: true,
+          },
         },
       },
-    },
-  });
-  return NextResponse.json(accounts, {
-    status: 200,
-    headers: {
-      'Cache-Control': 'public, s-maxage=30, stale-while-revalidate=60',
-    },
-  });
+    });
+    console.log('✅ [ACCOUNT API] Accounts found:', accounts.length);
+    if (accounts.length === 0) {
+      console.warn('⚠️ [ACCOUNT API] No accounts in database!');
+    }
+    return NextResponse.json(accounts, {
+      status: 200,
+      headers: {
+        'Cache-Control': 'public, s-maxage=30, stale-while-revalidate=60',
+      },
+    });
+  } catch (error: any) {
+    console.error('❌ [ACCOUNT API] Error fetching accounts:', error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
 }

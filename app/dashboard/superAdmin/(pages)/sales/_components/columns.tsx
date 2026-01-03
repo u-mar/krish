@@ -12,6 +12,9 @@ interface Order {
   type: string;
   status: string;
   discount: number;
+  isDebt: boolean;
+  debtAmount: number;
+  debtPaid: number;
   createdAt: string;
   items: {
     id: string;
@@ -79,6 +82,34 @@ export const columns: ColumnDef<Order>[] = [
       return <span className="text-gray-700 font-semibold">{row.original.total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>; // Format total price
     },
   },
+  {
+    accessorKey: "isDebt",
+    header: "Payment Status",
+    cell: ({ row }) => {
+      const order = row.original;
+      
+      if (!order.isDebt) {
+        return <span className="px-2 py-1 rounded font-semibold bg-green-100 text-green-800">✓ Paid</span>;
+      }
+      
+      if (order.debtAmount <= 0) {
+        return <span className="px-2 py-1 rounded font-semibold bg-green-100 text-green-800">✓ Debt Cleared</span>;
+      }
+      
+      return (
+        <div className="flex flex-col gap-1">
+          <span className="px-2 py-1 rounded font-semibold bg-red-100 text-red-800">
+            📋 Debt: {order.debtAmount.toFixed(2)}
+          </span>
+          {order.debtPaid > 0 && (
+            <span className="text-xs text-gray-600">
+              Paid: {order.debtPaid.toFixed(2)}
+            </span>
+          )}
+        </div>
+      );
+    },
+  },
   
   // {
   //   accessorKey: "status",
@@ -117,6 +148,15 @@ export const columns: ColumnDef<Order>[] = [
               View
             </button>
           </Link>
+
+          {/* Pay Debt Button - only show if it's a debt with remaining balance */}
+          {order.isDebt && order.debtAmount > 0 && (
+            <Link href={`/dashboard/superAdmin/sales/${order.id}/payDebt`}>
+              <button className="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700">
+                Pay Debt
+              </button>
+            </Link>
+          )}
 
           {/* Edit Button */}
           <Link href={`/dashboard/superAdmin/sales/edit/${order.id}`}>

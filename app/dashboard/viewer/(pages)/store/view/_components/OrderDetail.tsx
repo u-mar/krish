@@ -137,7 +137,6 @@ const OrderView = ({ order }: { order: any }) => {
                 <tr className="bg-gray-100">
                   <th className="py-2 px-4">Product Name</th>
                   <th className="py-2 px-4">Category</th>
-                  <th className="py-2 px-4">SKU</th>
                   <th className="py-2 px-4">Size</th>
                   <th className="py-2 px-4">Color</th>
                 </tr>
@@ -151,7 +150,6 @@ const OrderView = ({ order }: { order: any }) => {
                     <td className="py-3 px-4 border">
                       {item.product?.category?.name || "N/A"}
                     </td>
-                    <td className="py-3 px-4 border">{item.sku?.sku || "N/A"}</td>
                     <td className="py-3 px-4 border">{item.sku?.size || "N/A"}</td>
                     <td className="py-3 px-4 border">
                       {item.sku?.variant?.color || "N/A"}

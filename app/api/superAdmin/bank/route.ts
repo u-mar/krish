@@ -60,6 +60,13 @@ export async function GET(request: NextRequest) {
           acc: true, // 'cr' or 'dr' to indicate credit or debit
         },
       },
+      orders: {
+        where: { isDebt: true },
+        select: {
+          debtAmount: true,
+          debtPaid: true,
+        },
+      },
     },
   });
 
@@ -78,6 +85,12 @@ export async function GET(request: NextRequest) {
       .filter((transaction) => transaction.acc === "dr")
       .reduce((sum, transaction) => sum + (transaction.amount - transaction.amountPaid), 0);
 
+    // Add order debts to total debt owed
+    const orderDebtOwed = account.orders.reduce(
+      (sum, order) => sum + (order.debtAmount - order.debtPaid), 
+      0
+    );
+
     // Calculate balance by subtracting total debits from total credits
     const balance = totalCr - totalDr;
 
@@ -85,7 +98,7 @@ export async function GET(request: NextRequest) {
     return {
       ...account,
       balance, // Include the calculated balance
-      debtOwed, // Include the debt owed after payments
+      debtOwed: debtOwed + orderDebtOwed, // Include both transaction debt and order debt
     };
   });
 

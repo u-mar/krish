@@ -24,102 +24,45 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    // Fetch the account details based on accountId to get the current balance and currency
-    const account = await prisma.accounts.findUnique({
-      where: { id: body.accountId },
+    const { cashAmount = 0, digitalAmount = 0, details, tranDate } = body;
+    const totalAmount = cashAmount + digitalAmount;
+
+    // Generate reference number
+    const currentDate = new Date();
+    const dateStr = currentDate.toISOString().split("T")[0];
+    const timeStr = currentDate.toISOString().split("T")[1].split(".")[0];
+    const randomDigits = Math.floor(1000 + Math.random() * 9000);
+    const ref = `EXP-${dateStr}-${timeStr}-${randomDigits}`;
+
+    // Create the transaction
+    const newTransaction = await prisma.transaction.create({
+      data: {
+        userId: userId,
+        details: details,
+        tranDate: tranDate ? new Date(tranDate) : new Date(),
+        amount: totalAmount,
+        cashAmount: cashAmount,
+        digitalAmount: digitalAmount,
+        ref: ref,
+        amountType: "KES",
+      },
     });
 
-    if (!account) {
+    // Update wallet - deduct the amounts
+    const wallet = await prisma.wallet.findFirst();
+    
+    if (!wallet) {
       return NextResponse.json(
-        { error: "Account not found" },
+        { error: "Wallet not found" },
         { status: 404 }
       );
     }
 
-    // Automatically set amountType based on the account's currency
-    const amountType = account.account === "KES" ? "KES" : "USD";
-
-    // Initialize balances to be updated
-    let newBalance = account.balance;
-    let newCashBalance = account.cashBalance;
-
-    // If it's an exchange transaction
-    if (body.isExchange) {
-      if (body.exchangeType === "withdrawal") {
-        // Withdrawal: Decrease cash balance and increase digital balance
-        newCashBalance -= body.amount;
-        newBalance += body.amount;
-      } else if (body.exchangeType === "deposit") {
-        // Deposit: Increase cash balance and decrease digital balance
-        newCashBalance += body.amount;
-        newBalance -= body.amount;
-      } else {
-        return NextResponse.json(
-          { error: "Invalid exchange type. Must be 'withdrawal' or 'deposit'." },
-          { status: 400 }
-        );
-      }
-    } else {
-      // Regular transaction logic
-      if (body.type === "cash") {
-        // Adjust cashBalance if the transaction type is cash
-        if (body.acc === "Cr") {
-          // Credit: Increase cash balance
-          newCashBalance += body.amount;
-        } else if (body.acc === "Dr") {
-          // Debit: Decrease cash balance
-          newCashBalance -= body.amount;
-        } else {
-          return NextResponse.json(
-            { error: "Invalid transaction type (acc). Must be 'Cr' or 'Dr'." },
-            { status: 400 }
-          );
-        }
-      } else {
-        // Adjust regular balance if the transaction type is not cash
-        if (body.acc === "Cr") {
-          // Credit: Increase balance
-          newBalance += body.amount;
-        } else if (body.acc === "Dr") {
-          // Debit: Decrease balance
-          newBalance -= body.amount;
-        } else {
-          return NextResponse.json(
-            { error: "Invalid transaction type (acc). Must be 'Cr' or 'Dr'." },
-            { status: 400 }
-          );
-        }
-      }
-    }
-
-    // Create the transaction with the exchange or regular details
-    const newTransaction = await prisma.transaction.create({
+    await prisma.wallet.update({
+      where: { id: wallet.id },
       data: {
-        userId: userId,
-        accountId: body.accountId,
-        categoryId: body.categoryId,
-        details: body.details,
-        tranDate: body.tranDate,
-        type: body.type || null,
-        amount: body.amount,
-        amountType,
-        acc: body.acc || null,
-        ref: body.ref,
-        isExchange: body.isExchange || false, // Handle exchange flag
-        exchangeType: body.exchangeType || null, // Exchange transaction: exChange (optional)
-        senderName: body.senderName || null, // Optional sender name
-        senderPhone: body.senderPhone || null, // Optional sender phone
-        receiverName: body.receiverName || null, // Optional receiver name
-        receiverPhone: body.receiverPhone || null, // Optional receiver phone
-      },
-    });
-
-    // Update the account balance and cash balance with the new balance
-    await prisma.accounts.update({
-      where: { id: body.accountId },
-      data: {
-        balance: newBalance,
-        cashBalance: newCashBalance, // Update cashBalance if applicable
+        cashBalance: { decrement: cashAmount },
+        digitalBalance: { decrement: digitalAmount },
       },
     });
 
@@ -144,12 +87,6 @@ export async function GET(request: NextRequest) {
           select: {
             id: true,
             name: true,
-          },
-        },
-        account: {
-          select: {
-            id: true,
-            account: true,
           },
         },
         user: {

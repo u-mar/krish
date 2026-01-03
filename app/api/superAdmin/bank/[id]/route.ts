@@ -91,14 +91,6 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   // Get The bank
-
-  if (request.headers.get("content-length") === "0") {
-    return NextResponse.json(
-      { error: "you have to provide body information" },
-      { status: 400 }
-    );
-  }
-
   const GetBank = await prisma.bankAccount.findUnique({
     where: {
       id: params.id,
@@ -128,6 +120,29 @@ export async function GET(
       orderBy: { createdAt: "desc" },
       include: { account: { select: { id: true, account: true } } },
     });
+
+    // Fetch debt orders for this customer
+    const debtOrders = await prisma.sell.findMany({
+      where: {
+        bankAccountId: params.id,
+        isDebt: true,
+      },
+      orderBy: { createdAt: "desc" },
+      include: {
+        items: {
+          include: {
+            product: {
+              select: { id: true, name: true },
+            },
+          },
+        },
+        shop: {
+          select: { id: true, name: true },
+        },
+      },
+    });
+
+    console.log(`📋 Bank Account ${params.id} - Found ${debtOrders.length} debt orders`);
   
-  return NextResponse.json({bank, transactions}, { status: 200 });
+  return NextResponse.json({bank, transactions, debtOrders}, { status: 200 });
 }

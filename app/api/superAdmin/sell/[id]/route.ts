@@ -451,7 +451,14 @@ export async function GET(
       where: { id: sellId },
       include: {
         items: {
-          select: {
+          include: {
+            product: {
+              select: {
+                id: true,
+                name: true,
+                price: true,
+              },
+            },
             sku: {
               select: {
                 size: true,

@@ -117,20 +117,20 @@ export async function GET(request: NextRequest) {
                 size: true,
                 sku: true,
                 stockQuantity: true,
-                shopInventory: {
-                  select: {
-                    id: true,
-                    quantity: true,
-                    shopId: true,
-                  },
-                },
-                storeInventory: {
-                  select: {
-                    id: true,
-                    quantity: true,
-                    storeId: true,
-                  },
-                },
+              },
+            },
+            shopInventory: {
+              select: {
+                id: true,
+                quantity: true,
+                shopId: true,
+              },
+            },
+            storeInventory: {
+              select: {
+                id: true,
+                quantity: true,
+                storeId: true,
               },
             },
           },

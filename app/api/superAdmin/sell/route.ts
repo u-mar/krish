@@ -41,35 +41,16 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "User not found" }, { status: 404 });
   }
 
-  const { items, accountId, type, cashAmount, digitalAmount, shopId } = body;
+  const { items, type, cashAmount, digitalAmount, shopId, isDebt, customerId: bankAccountId } = body;
 
   if (!Array.isArray(items) || items.length === 0) {
     return NextResponse.json({ error: "Items are required" }, { status: 400 });
-  }
-
-  if (!accountId) {
-    return NextResponse.json(
-      { error: "Account ID is required" },
-      { status: 400 }
-    );
   }
 
   if (!shopId) {
     return NextResponse.json(
       { error: "Shop ID is required" },
       { status: 400 }
-    );
-  }
-
-  // Verify that the account exists
-  const account = await prisma.accounts.findUnique({
-    where: { id: accountId },
-  });
-
-  if (!account) {
-    return NextResponse.json(
-      { error: "Account not found" },
-      { status: 404 }
     );
   }
 
@@ -82,65 +63,82 @@ export async function POST(request: NextRequest) {
       // Start the transaction
       newSell = await prisma.$transaction(
         async (transactionPrisma) => {
+          // Process items and resolve SKU IDs
+          const processedItems = [];
+          
           for (const item of items) {
-            const sku = await transactionPrisma.sKU.findUnique({
-              where: { id: item.skuId },
+            // Validate variantId is provided
+            if (!item.variantId) {
+              throw new Error(`Variant ID is required for item`);
+            }
+
+            // Get the variant to validate
+            const variant = await transactionPrisma.variant.findUnique({
+              where: { id: item.variantId },
+              include: {
+                skus: true,
+              },
             });
 
-            if (!sku) {
-              throw new Error(`SKU with ID ${item.skuId} not found`);
-            }
-
-            if (sku.stockQuantity === 0) {
-              throw new Error(`SKU ${sku.sku} is out of stock.`);
-            }
-
-            if (sku.stockQuantity < item.quantity) {
-              throw new Error(
-                `Not enough stock for SKU ${sku.sku}. Available: ${sku.stockQuantity}, Requested: ${item.quantity}.`
-              );
+            if (!variant) {
+              throw new Error(`Variant with ID ${item.variantId} not found`);
             }
 
             if (item.quantity === 0) {
               throw new Error(`Quantity must be greater than 0.`);
             }
 
-            await transactionPrisma.sKU.update({
-              where: { id: item.skuId },
-              data: {
-                stockQuantity: {
-                  decrement: item.quantity,
+            // Use provided skuId or first SKU if available, otherwise null
+            let skuId = item.skuId;
+            if (!skuId && variant.skus && variant.skus.length > 0) {
+              skuId = variant.skus[0].id;
+            }
+
+            // Store processed item with resolved skuId (may be null)
+            processedItems.push({
+              ...item,
+              skuId: skuId || undefined,
+            });
+
+            // Update SKU stock if SKU exists
+            if (skuId) {
+              await transactionPrisma.sKU.update({
+                where: { id: skuId },
+                data: {
+                  stockQuantity: {
+                    decrement: item.quantity,
+                  },
                 },
-              },
-            });
+              });
 
-            const updatedSkus = await transactionPrisma.sKU.findMany({
-              where: { variant: { productId: item.productId } },
-              select: { stockQuantity: true },
-            });
+              const updatedSkus = await transactionPrisma.sKU.findMany({
+                where: { variant: { productId: item.productId } },
+                select: { stockQuantity: true },
+              });
 
-            const totalStockQuantity = updatedSkus.reduce(
-              (total, sku) => total + sku.stockQuantity,
-              0
-            );
+              const totalStockQuantity = updatedSkus.reduce(
+                (total, sku) => total + sku.stockQuantity,
+                0
+              );
 
-            await transactionPrisma.product.update({
-              where: { id: item.productId },
-              data: { stockQuantity: totalStockQuantity },
-            });
+              await transactionPrisma.product.update({
+                where: { id: item.productId },
+                data: { stockQuantity: totalStockQuantity },
+              });
+            }
 
             // Reduce shop inventory
             const shopInventory = await transactionPrisma.shopInventory.findFirst({
               where: {
                 shopId: shopId,
                 productId: item.productId,
-                skuId: item.skuId,
+                variantId: item.variantId,
               },
             });
 
             if (!shopInventory) {
               throw new Error(
-                `Product ${item.productId} with SKU ${item.skuId} not found in shop inventory`
+                `Product ${item.productId} with Variant ${item.variantId} not found in shop inventory`
               );
             }
 
@@ -160,43 +158,54 @@ export async function POST(request: NextRequest) {
             });
           }
 
-          // Calculate total amount
-          const totalAmount = items.reduce(
+          // Calculate total amount using processed items
+          const totalAmount = processedItems.reduce(
             (acc, item) => acc + item.price * item.quantity,
             0
           );
 
-          // Validate the cash and digital amounts if the type is 'both'
-          if (type === "both") {
-            const cashAmt = parseFloat(cashAmount);
-            const digitalAmt = parseFloat(digitalAmount);
-          
-            if (isNaN(cashAmt) || isNaN(digitalAmt)) {
-              throw new Error("Cash amount and digital amount must be valid numbers.");
-            }
-          
-            if (cashAmt <= 0 && digitalAmt <= 0) {
-              throw new Error(
-                "At least one of cashAmount or digitalAmount must be greater than zero for 'both' type transactions."
-              );
+          // Determine cash and digital amounts based on type
+          let finalCashAmount = 0;
+          let finalDigitalAmount = 0;
+
+          // If it's a debt order, don't process payment
+          if (!isDebt) {
+            if (type === "cash") {
+              finalCashAmount = totalAmount;
+            } else if (type === "digital") {
+              finalDigitalAmount = totalAmount;
+            } else if (type === "both") {
+              const cashAmt = parseFloat(cashAmount) || 0;
+              const digitalAmt = parseFloat(digitalAmount) || 0;
+            
+              if (cashAmt <= 0 && digitalAmt <= 0) {
+                throw new Error(
+                  "At least one of cashAmount or digitalAmount must be greater than zero for 'both' type transactions."
+                );
+              }
+              finalCashAmount = cashAmt;
+              finalDigitalAmount = digitalAmt;
             }
           }
 
-          // Create the sell record
+          // Create the sell record using processed items with resolved SKU IDs
           const createdSell = await transactionPrisma.sell.create({
             data: {
               userId: userId,
               orderId: await generateOrderId(), // Auto-generate orderId here
               total: totalAmount,
-              cashAmount: type === "both" ? cashAmount : undefined,
-              digitalAmount: type === "both" ? digitalAmount : undefined,
+              cashAmount: finalCashAmount > 0 ? finalCashAmount : undefined,
+              digitalAmount: finalDigitalAmount > 0 ? finalDigitalAmount : undefined,
               discount: 0,
               type: type,
               status: body.status || "pending",
-              accountId: accountId,
               shopId: shopId, // Link the sale to the shop
+              isDebt: isDebt || false,
+              debtAmount: isDebt ? totalAmount : 0,
+              debtPaid: 0,
+              bankAccountId: bankAccountId || undefined, // Link to bank account (customer) if provided
               items: {
-                create: items.map((item) => ({
+                create: processedItems.map((item) => ({
                   productId: item.productId,
                   price: item.price,
                   quantity: item.quantity,
@@ -207,26 +216,30 @@ export async function POST(request: NextRequest) {
             include: { items: true },
           });
 
-          // Adjust the account balance based on the type of payment
-          let newBalance = account.balance;
-          let newCashBalance = account.cashBalance;
+          // Only update wallet if not a debt order
+          if (!isDebt) {
+            // Update wallet balance
+            let wallet = await transactionPrisma.wallet.findFirst();
+            
+            if (!wallet) {
+              // Create wallet if it doesn't exist
+              wallet = await transactionPrisma.wallet.create({
+                data: {
+                  cashBalance: 0,
+                  digitalBalance: 0,
+                },
+              });
+            }
 
-          if (type === "cash") {
-            newCashBalance += totalAmount;
-          } else if (type === "digital") {
-            newBalance += totalAmount;
-          } else if (type === "both") {
-            newCashBalance += cashAmount;
-            newBalance += digitalAmount;
+            // Update wallet with new amounts
+            await transactionPrisma.wallet.update({
+              where: { id: wallet.id },
+              data: {
+                cashBalance: { increment: finalCashAmount },
+                digitalBalance: { increment: finalDigitalAmount },
+              },
+            });
           }
-
-          await transactionPrisma.accounts.update({
-            where: { id: accountId },
-            data: {
-              balance: newBalance,
-              cashBalance: newCashBalance,
-            },
-          });
 
           return createdSell;
         },
@@ -277,6 +290,9 @@ export async function GET(request: NextRequest) {
         accountId: true,
         shopId: true,
         customerId: true,
+        isDebt: true,
+        debtAmount: true,
+        debtPaid: true,
         items: {
           select: {
             id: true,

@@ -14,9 +14,10 @@ export async function POST(
 
   const id = params.id;
   const body = await request.json();
-  const { paymentAmount } = body;
+  const { cashAmount = 0, digitalAmount = 0 } = body;
+  const totalPayment = cashAmount + digitalAmount;
 
-  if (!paymentAmount || paymentAmount <= 0) {
+  if (!totalPayment || totalPayment <= 0) {
     return NextResponse.json(
       { error: "Invalid payment amount" },
       { status: 400 }
@@ -44,7 +45,7 @@ export async function POST(
       );
     }
 
-    const newAmountPaid = transaction.amountPaid + paymentAmount;
+    const newAmountPaid = transaction.amountPaid + totalPayment;
     const remainingBalance = transaction.amount - newAmountPaid;
 
     // Check if payment exceeds remaining balance
@@ -63,7 +64,27 @@ export async function POST(
       },
     });
 
-    // Update the bank account balance
+    // Update wallet with payment received
+    let wallet = await prisma.wallet.findFirst();
+    
+    if (!wallet) {
+      wallet = await prisma.wallet.create({
+        data: {
+          cashBalance: 0,
+          digitalBalance: 0,
+        },
+      });
+    }
+
+    await prisma.wallet.update({
+      where: { id: wallet.id },
+      data: {
+        cashBalance: { increment: cashAmount },
+        digitalBalance: { increment: digitalAmount },
+      },
+    });
+
+    // Update the bank account balance (keeping existing logic)
     const bankAccount = await prisma.bankAccount.findUnique({
       where: { id: transaction.bankAccountId },
     });
@@ -74,11 +95,11 @@ export async function POST(
         data: {
           cashBalance:
             bankAccount.cashBalance +
-            (transaction.cashBalance > 0 ? paymentAmount : 0),
+            (transaction.cashBalance > 0 ? totalPayment : 0),
           digitalBalance:
             bankAccount.digitalBalance +
-            (transaction.digitalBalance > 0 ? paymentAmount : 0),
-          totalBalance: bankAccount.totalBalance + paymentAmount,
+            (transaction.digitalBalance > 0 ? totalPayment : 0),
+          totalBalance: bankAccount.totalBalance + totalPayment,
         },
       });
     }

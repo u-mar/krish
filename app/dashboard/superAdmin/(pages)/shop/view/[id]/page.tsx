@@ -160,18 +160,9 @@ export default function ViewShopPage({
                       Product
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">
-                      SKU
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">
                       <div className="flex items-center gap-1">
                         <Palette className="h-3 w-3" />
-                        Color
-                      </div>
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">
-                      <div className="flex items-center gap-1">
-                        <Ruler className="h-3 w-3" />
-                        Size
+                        Variant
                       </div>
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">
@@ -186,13 +177,7 @@ export default function ViewShopPage({
                         {item.product.name}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <Badge variant="outline" className="font-mono">{item.sku.sku}</Badge>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <Badge variant="secondary">{item.sku.variant.color}</Badge>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <Badge variant="secondary">{item.sku.size}</Badge>
+                        <Badge variant="secondary">{item.variant.color}</Badge>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <Badge variant="default" className="font-mono">{item.quantity}</Badge>

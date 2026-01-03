@@ -118,7 +118,7 @@ const AddOrderForm: React.FC<{ order?: Order }> = ({ order }) => {
         shopId: order.shopId || "",
       }
       : {
-        products: [{ productId: "", name: "", price: 0, quantity: 1, unit: "pieces" as "pieces" | "boxes" }],
+        products: [{ productId: "", name: "", variantId: "", skuId: "", price: 0, quantity: 1, unit: "pieces" as "pieces" | "boxes" }],
         status: "paid",
         type: "both",
         accountId: "",
@@ -195,9 +195,15 @@ const AddOrderForm: React.FC<{ order?: Order }> = ({ order }) => {
   const handleVariantSelect = (index: number, variantId: string) => {
     const selectedProduct = products?.find((p) => p.id === watchProducts[index].productId);
     const selectedVariant = selectedProduct?.variants.find((variant) => variant.id === variantId);
-    if (selectedVariant) {
+    if (selectedVariant && selectedVariant.skus && selectedVariant.skus.length > 0) {
       setSelectedSkus((prev) => ({ ...prev, [index]: selectedVariant.skus }));
       setValue(`products.${index}.variantId`, variantId);
+      // Auto-select first SKU
+      const firstSku = selectedVariant.skus[0];
+      setValue(`products.${index}.skuId`, firstSku.id);
+      setValue(`products.${index}.stock`, firstSku.stockQuantity);
+    }
+  };
       setValue(`products.${index}.skuId`, "");
     }
   };
@@ -229,7 +235,7 @@ const AddOrderForm: React.FC<{ order?: Order }> = ({ order }) => {
   // Validate form fields and conditions for submit button
   useEffect(() => {
     const isProductsValid = watchProducts.every(
-      (item) => item.productId && item.variantId && item.skuId && item.price > 0 && item.quantity > 0
+      (item) => item.productId && item.variantId && item.price > 0 && item.quantity > 0
     );
     const isFormValid = isProductsValid && isValid;
 
@@ -305,7 +311,6 @@ const AddOrderForm: React.FC<{ order?: Order }> = ({ order }) => {
               <tr>
                 <th className="py-3 px-6 text-left">Product</th>
                 <th className="py-3 px-6 text-left">Variant</th>
-                <th className="py-3 px-6 text-left">SKU</th>
                 <th className="py-3 px-6 text-left">Price</th>
                 <th className="py-3 px-6 text-left">Quantity</th>
                 <th className="py-3 px-6 text-left">Unit</th>
@@ -366,21 +371,6 @@ const AddOrderForm: React.FC<{ order?: Order }> = ({ order }) => {
                       {selectedVariants[index]?.map((variant) => (
                         <option key={variant.id} value={variant.id}>
                           {variant.color}
-                        </option>
-                      ))}
-                    </select>
-                  </td>
-
-                  <td className="p-4 border">
-                    <select
-                      className="w-full border border-gray-300 rounded-lg p-3 text-base sm:text-sm focus:ring-2 focus:ring-blue-400"
-                      value={watchProducts[index]?.skuId || ""}
-                      onChange={(e) => handleSkuSelect(index, e.target.value)}
-                    >
-                      <option value="">Select SKU</option>
-                      {selectedSkus[index]?.map((sku) => (
-                        <option key={sku.id} value={sku.id}>
-                          {sku.size} ({sku.stockQuantity} in stock)
                         </option>
                       ))}
                     </select>

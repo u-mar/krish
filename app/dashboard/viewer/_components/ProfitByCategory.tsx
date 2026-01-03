@@ -60,7 +60,7 @@ const ProfitByCategory = () => {
         labels: chartLabels,
         datasets: [
           {
-            label: 'Sales by Category',
+            label: 'Sales by Product',
             data: chartDataValues,
             backgroundColor: backgroundColors.slice(0, chartLabels.length),
             hoverBackgroundColor: hoverBackgroundColors.slice(0, chartLabels.length),
@@ -114,8 +114,8 @@ const ProfitByCategory = () => {
       {/* Right Section: Profit Details */}
       <div className="w-full lg:w-2/3">
         <div className="flex justify-between items-center">
-          <h2 className="text-lg font-bold text-gray-900">Sales by Category</h2>
-          {/* Time Period Selector */}
+          <h2 className="text-lg font-bold text-gray-900">Sales by Product</h2>
+          {/* Time Period Selector */
           <select
             className="text-sm text-gray-400 bg-transparent focus:outline-none"
             value={period}

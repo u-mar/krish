@@ -20,11 +20,7 @@ export async function GET(
         inventory: {
           include: {
             product: true,
-            sku: {
-              include: {
-                variant: true,
-              },
-            },
+            variant: true,
           },
         },
       },

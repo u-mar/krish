@@ -34,6 +34,28 @@ export interface BankTransaction {
   createdAt: Date;
 }
 
+export interface DebtOrder {
+  id: string;
+  orderId: string;
+  total: number;
+  debtAmount: number;
+  debtPaid: number;
+  createdAt: Date;
+  shop: {
+    id: string;
+    name: string;
+  };
+  items: Array<{
+    id: string;
+    quantity: number;
+    price: number;
+    product: {
+      id: string;
+      name: string;
+    };
+  }>;
+}
+
 interface BankInfoProps {
   bankId: string; // Only pass the bank ID now
 }
@@ -56,9 +78,20 @@ const BankInfo: React.FC<BankInfoProps> = ({ bankId }) => {
 
   const bank = data.bank as BankAccount;
   const transactions = data.transactions as BankTransaction[];
+  const debtOrders = (data.debtOrders || []) as DebtOrder[];
+
+  console.log(`📊 BankInfo - Received ${debtOrders.length} debt orders for bank ${bankId}`);
+  if (debtOrders.length > 0) {
+    console.log('🔍 Debt orders:', debtOrders);
+  }
 
   // Group transactions by account type and calculate remaining balances
   const accountBalances = transactions.reduce((acc, tx) => {
+    // Skip transactions without an account
+    if (!tx.account) {
+      return acc;
+    }
+    
     const accountType = tx.account.account;
     if (!acc[accountType]) {
       acc[accountType] = { credit: 0, debit: 0 };
@@ -75,7 +108,7 @@ const BankInfo: React.FC<BankInfoProps> = ({ bankId }) => {
   }, {} as Record<string, { credit: number; debit: number }>);
 
   return (
-    <div className="p-6 max-w-4xl mx-auto space-y-8">
+    <div className="p-6 max-w-6xl mx-auto space-y-8">
       <div className="text-center mb-8">
         <h1 className="text-3xl font-bold text-gray-800">{bank.name}</h1>
         <p className="text-gray-500">Account Number: {bank.accountNumber}</p>
@@ -95,6 +128,104 @@ const BankInfo: React.FC<BankInfoProps> = ({ bankId }) => {
           </div>
         );
       })}
+
+      {/* Debt Orders Section */}
+      {debtOrders.length > 0 && (
+        <div className="mt-8 bg-yellow-50 border border-yellow-200 rounded-lg p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-2xl font-bold text-gray-800">📋 Order Debts</h2>
+            <div className="text-right">
+              <p className="text-sm text-gray-600">Total Debt Orders</p>
+              <p className="text-2xl font-bold text-red-600">
+                {debtOrders.reduce((sum, order) => sum + (order.debtAmount - order.debtPaid), 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} KSH
+              </p>
+            </div>
+          </div>
+          
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200 bg-white rounded-lg">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Order ID</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Shop</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Items</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Total</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Paid</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Remaining</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200">
+                {debtOrders.map((order) => {
+                  const remaining = order.debtAmount - order.debtPaid;
+                  const isFullyPaid = remaining <= 0;
+                  
+                  return (
+                    <tr key={order.id} className={isFullyPaid ? 'bg-green-50' : 'hover:bg-gray-50'}>
+                      <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                        {order.orderId}
+                      </td>
+                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-600">
+                        {new Date(order.createdAt).toLocaleDateString()}
+                      </td>
+                      <td className="px-4 py-4 whitespace-nowrap text-sm">
+                        {isFullyPaid ? (
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                            ✓ Paid
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                            Unpaid
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-600">
+                        {order.shop.name}
+                      </td>
+                      <td className="px-4 py-4 text-sm text-gray-600">
+                        <div className="max-w-xs">
+                          {order.items.map((item, idx) => (
+                            <div key={item.id}>
+                              {item.product.name} x{item.quantity}
+                              {idx < order.items.length - 1 && ', '}
+                            </div>
+                          ))}
+                        </div>
+                      </td>
+                      <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                        {order.total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </td>
+                      <td className="px-4 py-4 whitespace-nowrap text-sm text-green-600 font-medium">
+                        {order.debtPaid.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </td>
+                      <td className="px-4 py-4 whitespace-nowrap text-sm font-medium">
+                        <span className={isFullyPaid ? 'text-green-600' : 'text-red-600'}>
+                          {remaining.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </span>
+                      </td>
+                      <td className="px-4 py-4 whitespace-nowrap text-sm">
+                        {!isFullyPaid && (
+                          <Link
+                            href={`/dashboard/superAdmin/sales/${order.id}/payDebt`}
+                            className="inline-flex items-center px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700"
+                          >
+                            💰 Pay Debt
+                          </Link>
+                        )}
+                        {isFullyPaid && (
+                          <span className="text-green-600 font-semibold">✓ Paid</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* Action Buttons */}
       <div className="mt-4 flex gap-4 justify-center">
@@ -142,7 +273,7 @@ const BankInfo: React.FC<BankInfoProps> = ({ bankId }) => {
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                    {tx.account.account}
+                    {tx.account?.account || "N/A"}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
                     {tx.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}

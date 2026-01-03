@@ -12,10 +12,10 @@ const ProductViewPage = async ({ params }: { params: { id: string } }) => {
         category: true,
         variants: {
           include: {
+            shopInventory: true,
+            storeInventory: true,
             skus: {
               include: {
-                shopInventory: true,
-                storeInventory: true,
                 sellItem: {
                   include: {
                     sell: true, // Include the Sell entity

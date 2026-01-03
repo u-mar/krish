@@ -84,26 +84,26 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    // Aggregate sales amount per category
-    const categorySales: { [categoryName: string]: number } = {};
+    // Aggregate sales amount per product
+    const productSales: { [productName: string]: number } = {};
 
     sells.forEach((sell) => {
       sell.items.forEach((item) => {
-        const categoryName = item.product?.category?.name || "Unknown";
+        const productName = item.product?.name || "Unknown";
         const itemTotal = item.price * item.quantity;
 
-        if (categorySales[categoryName]) {
-          categorySales[categoryName] += itemTotal;
+        if (productSales[productName]) {
+          productSales[productName] += itemTotal;
         } else {
-          categorySales[categoryName] = itemTotal;
+          productSales[productName] = itemTotal;
         }
       });
     });
 
     // Convert the result to an array
-    const result = Object.keys(categorySales).map((categoryName) => ({
-      category: categoryName,
-      total: categorySales[categoryName],
+    const result = Object.keys(productSales).map((productName) => ({
+      category: productName,
+      total: productSales[productName],
     }));
 
     return NextResponse.json({

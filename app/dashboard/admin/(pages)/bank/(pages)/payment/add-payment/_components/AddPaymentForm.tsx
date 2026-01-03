@@ -28,31 +28,11 @@ const AddPaymentForm = ({ bankTransaction }: { bankTransaction?: BankTransaction
   const router = useRouter();
   const queryClient = useQueryClient();
   const [loading, setLoading] = useState(false);
-  const [accountId, setAccountId] = useState<string>("");
 
   // Extract bankAccountId and acc from URL
   const searchParams = useSearchParams();
   const bankAccountId = searchParams.get("bankAccountId") || undefined;
   const acc = searchParams.get("acc") || undefined;
-
-  // Fetch first account on mount
-  useEffect(() => {
-    const fetchAccount = async () => {
-      try {
-        const response = await axios.get(`${API}/admin/account`);
-        if (response.data && response.data.length > 0) {
-          setAccountId(response.data[0].id);
-        }
-      } catch (error) {
-        console.error("Error fetching account:", error);
-      }
-    };
-    if (!bankTransaction) {
-      fetchAccount();
-    } else {
-      setAccountId(bankTransaction.accountId);
-    }
-  }, [bankTransaction]);
 
   // Ensure acc and bankAccountId are available
   useEffect(() => {
@@ -68,19 +48,12 @@ const AddPaymentForm = ({ bankTransaction }: { bankTransaction?: BankTransaction
     defaultValues: {
       bankAccountId: bankTransaction?.bankAccountId || bankAccountId,
       acc: bankTransaction?.acc || (acc === "credit" ? "cr" : "dr"),
-      accountId: bankTransaction?.accountId || "",
+      accountId: bankTransaction?.accountId,
       cashBalance: bankTransaction?.cashBalance || 0,
       digitalBalance: bankTransaction?.digitalBalance || 0,
       details: bankTransaction?.details || "",
     },
   });
-
-  // Update accountId when fetched
-  useEffect(() => {
-    if (accountId && !bankTransaction) {
-      form.setValue("accountId", accountId);
-    }
-  }, [accountId, bankTransaction, form]);
 
 
   // Prevent scroll on number inputs
@@ -90,43 +63,63 @@ const AddPaymentForm = ({ bankTransaction }: { bankTransaction?: BankTransaction
 
 
   const onSubmit = async (values: z.infer<typeof bankTransactionSchema>) => {
+    console.log('🔵 [DEBT FORM] Submit button clicked');
+    console.log('🔵 [DEBT FORM] Form values received:', JSON.stringify(values, null, 2));
+    console.log('🔵 [DEBT FORM] Form state:', {
+      isValid: form.formState.isValid,
+      isDirty: form.formState.isDirty,
+      errors: form.formState.errors,
+    });
+
     const amount = parseFloat(values.cashBalance?.toString() || "0") || 0;
+    console.log('🔵 [DEBT FORM] Parsed amount:', amount);
 
     if (amount <= 0) {
+      console.error('❌ [DEBT FORM] Invalid amount:', amount);
       toast.error("Amount must be greater than zero");
       return;
     }
+    console.log('✅ [DEBT FORM] Amount validated:', amount);
 
-    if (!values.accountId) {
-      toast.error("Account not loaded. Please wait or refresh the page.");
-      return;
-    }
+    const payload = {
+      ...values,
+      cashBalance: amount,
+      digitalBalance: 0,
+    };
+    console.log('🔵 [DEBT FORM] Prepared payload:', JSON.stringify(payload, null, 2));
 
     setLoading(true);
+    console.log('🔵 [DEBT FORM] Loading state set to true');
+    
     try {
       if (bankTransaction) {
-        await axios.patch(`${API}/admin/bankTransaction/${bankTransaction.id}`, {
-          ...values,
-          cashBalance: amount,
-          digitalBalance: 0,
-        });
+        console.log('🔵 [DEBT FORM] Updating existing debt, ID:', bankTransaction.id);
+        const response = await axios.patch(`${API}/admin/bankTransaction/${bankTransaction.id}`, payload);
+        console.log('✅ [DEBT FORM] Update successful:', response.data);
         toast.success(`Successfully Updated Debt`);
       } else {
-        await axios.post(`${API}/admin/bankTransaction`, {
-          ...values,
-          cashBalance: amount,
-          digitalBalance: 0,
-        });
+        console.log('🔵 [DEBT FORM] Creating new debt');
+        console.log('🔵 [DEBT FORM] API endpoint:', `${API}/admin/bankTransaction`);
+        const response = await axios.post(`${API}/admin/bankTransaction`, payload);
+        console.log('✅ [DEBT FORM] Creation successful:', response.data);
         toast.success(`Successfully Created Debt`);
       }
 
+      console.log('🔵 [DEBT FORM] Invalidating cache queries');
       queryClient.invalidateQueries({ queryKey: ["bankPayment"] });
-      router.push(`/dashboard/admin/bank/view/${bankAccountId || bankTransaction?.bankAccountId}`);
+      
+      const redirectUrl = `/dashboard/admin/bank/view/${bankAccountId || bankTransaction?.bankAccountId}`;
+      console.log('🔵 [DEBT FORM] Redirecting to:', redirectUrl);
+      router.push(redirectUrl);
     } catch (error: any) {
-      console.error("Error handling payment request", error);
+      console.error('❌ [DEBT FORM] Error occurred:', error);
+      console.error('❌ [DEBT FORM] Error response:', error.response?.data);
+      console.error('❌ [DEBT FORM] Error status:', error.response?.status);
+      console.error('❌ [DEBT FORM] Error message:', error.message);
       toast.error(error.response?.data?.error || "An error occurred. Please try again.");
     } finally {
       setLoading(false);
+      console.log('🔵 [DEBT FORM] Loading state set to false');
     }
   };
 

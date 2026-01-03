@@ -59,6 +59,11 @@ const BankInfo: React.FC<BankInfoProps> = ({ bankId }) => {
 
   // Group transactions by account type
   const accountBalances = transactions.reduce((acc, tx) => {
+    // Skip transactions without an account
+    if (!tx.account) {
+      return acc;
+    }
+    
     const accountType = tx.account.account;
     if (!acc[accountType]) {
       acc[accountType] = { credit: 0, debit: 0 };
@@ -141,7 +146,7 @@ const BankInfo: React.FC<BankInfoProps> = ({ bankId }) => {
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                    {tx.account.account}
+                    {tx.account?.account || "N/A"}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
                     {tx.cashBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}

@@ -80,6 +80,12 @@ const superAdminRoutes = [
         icon: Send,
       },
       {
+        name: "Wallet",
+        path: "/dashboard/superAdmin/wallet",
+        icon: Landmark,
+        new: true,
+      },
+      {
         name: "Customers",
         path: "/dashboard/superAdmin/bank",
         icon: Landmark,

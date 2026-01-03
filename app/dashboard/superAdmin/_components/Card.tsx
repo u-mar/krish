@@ -62,7 +62,7 @@ const CardsDetails = ({ selectedLocation }: { selectedLocation?: string }) => {
     fetchStats();
   }, [selectedLocation]);
 
-  if (loading) {
+  if (loading || !stats) {
     return (
       <>
         <div className="bg-white rounded-lg shadow p-6 animate-pulse">

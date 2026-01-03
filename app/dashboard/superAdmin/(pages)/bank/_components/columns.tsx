@@ -134,32 +134,34 @@ export const columns: ColumnDef<Bank>[] = [
       const bank = row.original;
 
       return (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="h-8 w-8 p-0">
-              <span className="sr-only">Open menu</span>
-              <MoreHorizontal className="h-4 w-4" />
+        <div className="flex items-center gap-2">
+          <Link href={`/dashboard/superAdmin/bank/view/${bank.id}`}>
+            <Button variant="outline" size="sm" className="gap-2">
+              <Eye className="h-4 w-4" />
+              View
             </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuLabel>Actions</DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            <Link href={`/dashboard/superAdmin/bank/view/${bank.id}`}>
-              <DropdownMenuItem>
-                <Eye className="mr-2 h-4 w-4" />
-                View Details
-              </DropdownMenuItem>
-            </Link>
-            <Link href={`/dashboard/superAdmin/bank/edit/${bank.id}`}>
-              <DropdownMenuItem>
-                <Edit className="mr-2 h-4 w-4" />
-                Edit
-              </DropdownMenuItem>
-            </Link>
-            <DropdownMenuSeparator />
-            <DeleteAlertDialog id={bank.id} type="bank" />
-          </DropdownMenuContent>
-        </DropdownMenu>
+          </Link>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" className="h-8 w-8 p-0">
+                <span className="sr-only">Open menu</span>
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuLabel>Actions</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <Link href={`/dashboard/superAdmin/bank/edit/${bank.id}`}>
+                <DropdownMenuItem>
+                  <Edit className="mr-2 h-4 w-4" />
+                  Edit
+                </DropdownMenuItem>
+              </Link>
+              <DropdownMenuSeparator />
+              <DeleteAlertDialog id={bank.id} type="bank" />
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       );
     },
   },

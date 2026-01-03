@@ -35,20 +35,23 @@ const PayDebtDialog = ({
   const router = useRouter();
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
-  const [paymentAmount, setPaymentAmount] = useState<string>("");
+  const [cashAmount, setCashAmount] = useState<string>("");
+  const [digitalAmount, setDigitalAmount] = useState<string>("");
   const [loading, setLoading] = useState(false);
 
   const remainingBalance = amount - amountPaid;
 
   const handlePayment = async () => {
-    const payment = parseFloat(paymentAmount);
+    const cash = parseFloat(cashAmount) || 0;
+    const digital = parseFloat(digitalAmount) || 0;
+    const totalPayment = cash + digital;
 
-    if (!payment || payment <= 0) {
+    if (totalPayment <= 0) {
       toast.error("Please enter a valid payment amount");
       return;
     }
 
-    if (payment > remainingBalance) {
+    if (totalPayment > remainingBalance) {
       toast.error("Payment amount exceeds remaining balance");
       return;
     }
@@ -57,16 +60,19 @@ const PayDebtDialog = ({
 
     try {
       await axios.post(`${API}/${role}/bankTransaction/pay/${transactionId}`, {
-        paymentAmount: payment,
+        cashAmount: cash,
+        digitalAmount: digital,
       });
 
       toast.success("Payment recorded successfully");
       setOpen(false);
-      setPaymentAmount("");
+      setCashAmount("");
+      setDigitalAmount("");
       
       // Invalidate queries to trigger re-fetch
       queryClient.invalidateQueries({ queryKey: ["bankPayment"] });
       queryClient.invalidateQueries({ queryKey: ["bank"] });
+      queryClient.invalidateQueries({ queryKey: ["wallet"] });
       
       router.refresh();
     } catch (error: any) {
@@ -121,17 +127,34 @@ const PayDebtDialog = ({
               disabled
             />
           </div>
-          <div className="grid gap-2">
-            <Label htmlFor="payment">Payment Amount</Label>
-            <Input
-              id="payment"
-              type="number"
-              step="0.01"
-              placeholder="Enter payment amount"
-              value={paymentAmount}
-              onChange={(e) => setPaymentAmount(e.target.value)}
-              disabled={loading}
-            />
+          <div className="grid grid-cols-2 gap-4">
+            <div className="grid gap-2">
+              <Label htmlFor="cash">💵 Cash Payment</Label>
+              <Input
+                id="cash"
+                type="number"
+                step="0.01"
+                placeholder="0.00"
+                value={cashAmount}
+                onChange={(e) => setCashAmount(e.target.value)}
+                disabled={loading}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="digital">💳 Digital Payment</Label>
+              <Input
+                id="digital"
+                type="number"
+                step="0.01"
+                placeholder="0.00"
+                value={digitalAmount}
+                onChange={(e) => setDigitalAmount(e.target.value)}
+                disabled={loading}
+              />
+            </div>
+          </div>
+          <div className="text-sm text-gray-600">
+            <p>Total Payment: <span className="font-semibold">{((parseFloat(cashAmount) || 0) + (parseFloat(digitalAmount) || 0)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></p>
           </div>
         </div>
         <DialogFooter>

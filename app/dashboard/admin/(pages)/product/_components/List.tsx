@@ -12,7 +12,7 @@ import Loading from "@/app/loading";
 
 
 export default function List() {
-  const { data, isError, isLoading } = useQuery({
+  const { data, isError, isLoading, error } = useQuery({
     queryKey: ["product"],
     queryFn: () => axios.get(`${API}/admin/product`).then((res) => res.data),
     staleTime: 0,
@@ -24,7 +24,8 @@ export default function List() {
   }
 
   if (isError || !data) {
-    return <div>Error loading products.</div>;
+    console.error('Error loading products:', error);
+    return <div>Error loading products: {error?.message || 'Unknown error'}</div>;
   }
 
 

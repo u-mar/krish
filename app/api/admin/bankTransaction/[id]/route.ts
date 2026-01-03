@@ -34,7 +34,7 @@ export async function PATCH(
 
     const oldAccountId = existingTransaction.accountId;
     const oldAccount = await prisma.accounts.findUnique({
-      where: { id: oldAccountId },
+      where: { id: oldAccountId || undefined },
     });
 
     if (!oldAccount) {
@@ -67,7 +67,7 @@ export async function PATCH(
     if (newAccountIdChanged) {
       // Fetch the new account
       newAccount = await prisma.accounts.findUnique({
-        where: { id: newAccountId },
+        where: { id: newAccountId || undefined },
       });
 
       if (!newAccount) {
@@ -104,7 +104,7 @@ export async function PATCH(
     await prisma.$transaction(async (prisma) => {
       // Update the old account balances
       await prisma.accounts.update({
-        where: { id: oldAccountId },
+        where: { id: oldAccountId || undefined },
         data: {
           cashBalance: oldCashBalance,
           balance: oldDigitalBalance,
@@ -114,7 +114,7 @@ export async function PATCH(
       if (newAccountIdChanged) {
         // Update the new account balances
         await prisma.accounts.update({
-          where: { id: newAccountId },
+          where: { id: newAccountId || undefined },
           data: {
             cashBalance: newCashBalance,
             balance: newDigitalBalance,
@@ -123,7 +123,7 @@ export async function PATCH(
       } else {
         // If the account didn't change, update the balances in the same account
         await prisma.accounts.update({
-          where: { id: newAccountId },
+          where: { id: newAccountId || undefined },
           data: {
             cashBalance: newCashBalance,
             balance: newDigitalBalance,

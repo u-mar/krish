@@ -55,8 +55,6 @@ export const columns: ColumnDef<Transaction>[] = [
       return <span className="font-semibold text-red-600">{formattedAmount}</span>;
     },
   },
-        return <span>Cash</span>;
-      } else if (type === "digital") {
   {
     accessorKey: "createdAt",
     header: "Created At",

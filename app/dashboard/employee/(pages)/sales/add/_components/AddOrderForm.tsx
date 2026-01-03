@@ -204,9 +204,6 @@ const AddOrderForm: React.FC<{ order?: Order }> = ({ order }) => {
       setValue(`products.${index}.stock`, firstSku.stockQuantity);
     }
   };
-      setValue(`products.${index}.skuId`, "");
-    }
-  };
 
   const handleSkuSelect = (index: number, skuId: string) => {
     setValue(`products.${index}.skuId`, skuId);

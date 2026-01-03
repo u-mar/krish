@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import prisma from "@/prisma/client";
 import { getServerSession } from "next-auth";
-import { AuthOptions } from "@/app/api/auth/[...nextauth]/AuthOptions";
+import AuthOptions from "@/app/api/auth/[...nextauth]/AuthOptions";
 
 // POST transfer product between locations
 export async function POST(request: Request) {

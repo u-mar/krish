@@ -83,7 +83,7 @@ const ProfitByCategory = () => {
   }, [period]);
 
   const options = {
-    cutout: '70%', // Creates the "donut" effect
+    cutout: '70%',
     plugins: {
       legend: {
         display: false,
@@ -93,10 +93,8 @@ const ProfitByCategory = () => {
 
   return (
     <div className="bg-white rounded-lg shadow p-6 w-full lg:w-full flex flex-col lg:flex-row items-center justify-between space-y-6 lg:space-y-0 lg:space-x-10 ">
-      {/* Left Section: Donut Chart */}
       <div className="w-full lg:w-1/3 lg:h-48">
         {loading ? (
-          // Loading skeleton for the chart
           <div className="flex items-center justify-center h-full">
             <div className="animate-pulse">
               <div className="h-32 w-32 bg-gray-200 rounded-full"></div>
@@ -111,11 +109,9 @@ const ProfitByCategory = () => {
         )}
       </div>
 
-      {/* Right Section: Profit Details */}
       <div className="w-full lg:w-2/3">
         <div className="flex justify-between items-center">
           <h2 className="text-lg font-bold text-gray-900">Sales by Product</h2>
-          {/* Time Period Selector */
           <select
             className="text-sm text-gray-400 bg-transparent focus:outline-none"
             value={period}
@@ -130,13 +126,10 @@ const ProfitByCategory = () => {
         </div>
 
         {loading ? (
-          // Loading skeleton for total profit and category details
           <div className="animate-pulse mt-4">
-            {/* Total Profit Skeleton */}
             <div className="h-8 bg-gray-200 rounded w-1/2 mb-2"></div>
             <div className="h-4 bg-gray-200 rounded w-1/3 mb-4"></div>
 
-            {/* Category Details Skeleton */}
             {[...Array(5)].map((_, index) => (
               <div key={index} className="flex justify-between items-center mb-3">
                 <div className="flex items-center space-x-2">
@@ -155,7 +148,6 @@ const ProfitByCategory = () => {
             <div className="text-sm text-gray-400 mb-4">Total Sales</div>
 
             <div className="space-y-3 lg:space-y-6 lg:h-64">
-              {/* Category Details */}
               {chartData.labels.map((label: string, index: number) => (
                 <div key={index} className="flex justify-between">
                   <span className="flex items-center space-x-2">

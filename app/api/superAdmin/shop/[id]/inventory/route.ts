@@ -1,6 +1,6 @@
 import prisma from "@/prisma/client";
 import { getServerSession } from "next-auth";
-import { AuthOptions } from "@/app/api/auth/[...nextauth]/AuthOptions";
+import AuthOptions from "@/app/api/auth/[...nextauth]/AuthOptions";
 import { NextRequest, NextResponse } from "next/server";
 
 // Add inventory to a shop

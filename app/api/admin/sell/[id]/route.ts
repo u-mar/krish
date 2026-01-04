@@ -133,7 +133,7 @@ export async function PATCH(
           // Reverse stock quantities for existing items
           for (const existingItem of existingSell.items) {
             await transactionPrisma.sKU.update({
-              where: { id: existingItem.skuId },
+              where: { id: existingItem.skuId || undefined },
               data: {
                 stockQuantity: {
                   increment: existingItem.quantity, // Restock old items
@@ -150,7 +150,7 @@ export async function PATCH(
           // Process each new item in the updated sale
           for (const item of items) {
             const sku = await transactionPrisma.sKU.findUnique({
-              where: { id: item.skuId },
+              where: { id: item.skuId || undefined },
             });
 
             if (!sku || sku.stockQuantity < item.quantity) {
@@ -161,7 +161,7 @@ export async function PATCH(
 
             // Decrease the SKU stock quantity
             await transactionPrisma.sKU.update({
-              where: { id: item.skuId },
+              where: { id: item.skuId || undefined },
               data: {
                 stockQuantity: {
                   decrement: item.quantity,
@@ -201,13 +201,13 @@ export async function PATCH(
 
           // Fetch old account
           const oldAccount = await transactionPrisma.accounts.findUnique({
-            where: { id: oldAccountId },
+            where: { id: oldAccountId || undefined },
           });
 
           const newAccount =
             accountId !== oldAccountId
               ? await transactionPrisma.accounts.findUnique({
-                  where: { id: accountId },
+                  where: { id: accountId || undefined },
                 })
               : oldAccount;
 
@@ -231,7 +231,7 @@ export async function PATCH(
           // Update the account balances in the database
           if (oldAccount) {
             await transactionPrisma.accounts.update({
-              where: { id: oldAccountId },
+              where: { id: oldAccountId || undefined },
               data: {
                 balance: oldAccount.balance,
                 cashBalance: oldAccount.cashBalance,
@@ -314,7 +314,7 @@ export async function DELETE(
           const digitalAmount = existingSell.digitalAmount || 0;
 
           const account = await transactionPrisma.accounts.findUnique({
-            where: { id: accountId },
+            where: { id: accountId || undefined },
           });
 
           if (!account) {
@@ -343,7 +343,7 @@ export async function DELETE(
 
           // Update the account with the adjusted balances
           await transactionPrisma.accounts.update({
-            where: { id: accountId },
+            where: { id: accountId || undefined },
             data: {
               balance: newBalance,
               cashBalance: newCashBalance,
@@ -353,7 +353,7 @@ export async function DELETE(
           // Update the stock quantity for each item
           for (const item of existingSell.items) {
             const sku = await transactionPrisma.sKU.findUnique({
-              where: { id: item.skuId },
+              where: { id: item.skuId || undefined },
               include: {
                 variant: {
                   select: {

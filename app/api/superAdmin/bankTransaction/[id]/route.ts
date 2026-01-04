@@ -33,6 +33,14 @@ export async function PATCH(
     }
 
     const oldAccountId = existingTransaction.accountId;
+    
+    if (!oldAccountId) {
+      return NextResponse.json(
+        { error: "Transaction has no associated account" },
+        { status: 400 }
+      );
+    }
+
     const oldAccount = await prisma.accounts.findUnique({
       where: { id: oldAccountId },
     });
@@ -174,6 +182,13 @@ export async function DELETE(
       return NextResponse.json(
         { error: "Bank transaction not found" },
         { status: 404 }
+      );
+    }
+
+    if (!transaction.accountId) {
+      return NextResponse.json(
+        { error: "Transaction has no associated account" },
+        { status: 400 }
       );
     }
 

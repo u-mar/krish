@@ -44,12 +44,13 @@ export async function POST(
     // Process all items
     const results = [];
     for (const item of itemsToProcess) {
-      // Get SKU to find productId
+      // Get SKU to find productId and variantId
       const sku = await prisma.sKU.findUnique({
         where: { id: item.skuId },
         include: {
           variant: {
             select: {
+              id: true,
               productId: true
             }
           }
@@ -64,13 +65,14 @@ export async function POST(
       }
 
       const productId = sku.variant.productId;
+      const variantId = sku.variant.id;
 
-      // Check if inventory already exists
+      // Check if inventory already exists (using variantId, not skuId)
       const existingInventory = await prisma.storeInventory.findUnique({
         where: {
-          storeId_skuId: {
+          storeId_variantId: {
             storeId: params.id,
-            skuId: item.skuId,
+            variantId: variantId,
           },
         },
       });
@@ -80,22 +82,19 @@ export async function POST(
         // Update existing inventory by adding quantity
         inventory = await prisma.storeInventory.update({
           where: {
-            storeId_skuId: {
+            storeId_variantId: {
               storeId: params.id,
-              skuId: item.skuId,
+              variantId: variantId,
             },
           },
           data: {
             quantity: existingInventory.quantity + item.quantity,
           },
           include: {
-            sku: {
+            variant: {
               include: {
-                variant: {
-                  include: {
-                    product: true,
-                  },
-                },
+                skus: true,
+                product: true,
               },
             },
           },
@@ -110,19 +109,16 @@ export async function POST(
             product: {
               connect: { id: productId }
             },
-            sku: {
-              connect: { id: item.skuId }
+            variant: {
+              connect: { id: variantId }
             },
             quantity: item.quantity,
           },
           include: {
-            sku: {
+            variant: {
               include: {
-                variant: {
-                  include: {
-                    product: true,
-                  },
-                },
+                skus: true,
+                product: true,
               },
             },
           },
@@ -155,13 +151,10 @@ export async function GET(
     const inventory = await prisma.storeInventory.findMany({
       where: { storeId: params.id },
       include: {
-        sku: {
+        variant: {
           include: {
-            variant: {
-              include: {
-                product: true,
-              },
-            },
+            skus: true,
+            product: true,
           },
         },
       },

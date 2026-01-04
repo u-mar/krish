@@ -48,20 +48,16 @@ export async function GET(request: NextRequest) {
       const shopInventory = await prisma.shopInventory.findMany({
         where: { shopId },
         include: {
-          sku: {
+          variant: {
             include: {
-              variant: {
-                include: {
-                  product: true,
-                },
-              },
+              product: true,
             },
           },
         },
       });
 
       // Calculate stats from shop inventory
-      const uniqueProducts = new Set(shopInventory.map(inv => inv.sku.variant.product.id));
+      const uniqueProducts = new Set(shopInventory.map(inv => inv.variant.product.id));
       const totalProducts = uniqueProducts.size;
 
       const availableStock = shopInventory.reduce((sum, inv) => sum + inv.quantity, 0);

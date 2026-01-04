@@ -127,12 +127,9 @@ for (const variant of body.variants) {
       include: {
         variants: {
           include: {
-            skus: {
-              include: {
-                shopInventory: true,
-                storeInventory: true,
-              },
-            },
+            skus: true,
+            shopInventory: true,
+            storeInventory: true,
           },
         },
       },
@@ -194,12 +191,9 @@ export async function GET(
       include: {
         variants: {
           include: {
-            skus: {
-              include: {
-                shopInventory: true,
-                storeInventory: true,
-              },
-            },
+            skus: true,
+            shopInventory: true,
+            storeInventory: true,
           },
         },
       },

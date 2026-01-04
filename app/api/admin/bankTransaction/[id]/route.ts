@@ -178,7 +178,7 @@ export async function DELETE(
     }
 
     const account = await prisma.accounts.findUnique({
-      where: { id: transaction.accountId },
+      where: { id: transaction.accountId || undefined },
     });
 
     if (!account) {
@@ -199,7 +199,7 @@ export async function DELETE(
 
     // Update the account with new balances
     await prisma.accounts.update({
-      where: { id: transaction.accountId },
+      where: { id: transaction.accountId || undefined },
       data: {
         cashBalance: newCashBalance,
         balance: newDigitalBalance,

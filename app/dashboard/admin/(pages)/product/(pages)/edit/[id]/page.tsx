@@ -11,12 +11,9 @@ const EditProductPage = async ({ params }: { params: { id: string } }) => {
         include: {
           variants: {
             include: {
-              skus: {
-                include: {
-                  shopInventory: true,
-                  storeInventory: true,
-                },
-              },
+              skus: true,
+              shopInventory: true,
+              storeInventory: true,
             },
           },
         },

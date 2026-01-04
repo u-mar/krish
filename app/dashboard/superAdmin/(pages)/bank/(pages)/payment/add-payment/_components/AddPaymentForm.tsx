@@ -48,7 +48,7 @@ const AddPaymentForm = ({ bankTransaction }: { bankTransaction?: BankTransaction
     defaultValues: {
       bankAccountId: bankTransaction?.bankAccountId || bankAccountId,
       acc: bankTransaction?.acc || (acc === "credit" ? "cr" : "dr"),
-      accountId: bankTransaction?.accountId,
+      accountId: bankTransaction?.accountId ?? undefined,
       cashBalance: bankTransaction?.cashBalance || 0,
       digitalBalance: bankTransaction?.digitalBalance || 0,
       details: bankTransaction?.details || "",

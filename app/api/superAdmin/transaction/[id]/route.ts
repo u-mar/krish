@@ -66,11 +66,12 @@ export async function PATCH(
     if (balanceAffected) {
       // Revert existing transaction's effect on the old account
       const oldAccountId = existingTransaction.accountId;
-      const oldAccount =
-        balancesByAccountId[oldAccountId] ||
-        (await prisma.accounts.findUnique({
-          where: { id: oldAccountId },
-        }));
+      const oldAccount = oldAccountId
+        ? (balancesByAccountId[oldAccountId] ||
+          (await prisma.accounts.findUnique({
+            where: { id: oldAccountId },
+          })))
+        : null;
 
       if (!oldAccount) {
         return NextResponse.json(
@@ -80,7 +81,7 @@ export async function PATCH(
       }
 
       let { balance: oldBalance, cashBalance: oldCashBalance } =
-        balancesByAccountId[oldAccountId] || {
+        (oldAccountId && balancesByAccountId[oldAccountId]) || {
           balance: oldAccount.balance,
           cashBalance: oldAccount.cashBalance,
         };
@@ -92,10 +93,12 @@ export async function PATCH(
           oldCashBalance
         ));
 
-      balancesByAccountId[oldAccountId] = {
-        balance: oldBalance,
-        cashBalance: oldCashBalance,
-      };
+      if (oldAccountId) {
+        balancesByAccountId[oldAccountId] = {
+          balance: oldBalance,
+          cashBalance: oldCashBalance,
+        };
+      }
 
       // Apply new transaction's effect on the new account
       const newAccountId = body.accountId;
@@ -275,6 +278,13 @@ export async function DELETE(
       return NextResponse.json(
         { error: "Transaction not found" },
         { status: 404 }
+      );
+    }
+
+    if (!transaction.accountId) {
+      return NextResponse.json(
+        { error: "Transaction has no associated account" },
+        { status: 400 }
       );
     }
 

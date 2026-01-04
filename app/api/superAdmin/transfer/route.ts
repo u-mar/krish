@@ -49,23 +49,35 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
-    // Check source inventory
+    // Get SKU to find variantId
+    const sku = await prisma.sKU.findUnique({
+      where: { id: skuId },
+      select: { variantId: true }
+    });
+
+    if (!sku) {
+      return NextResponse.json({ error: "SKU not found" }, { status: 404 });
+    }
+
+    const variantId = sku.variantId;
+
+    // Check source inventory (using variantId)
     let sourceInventory;
     if (fromType === "store" && fromStoreId) {
       sourceInventory = await prisma.storeInventory.findUnique({
         where: {
-          storeId_skuId: {
+          storeId_variantId: {
             storeId: fromStoreId,
-            skuId: skuId,
+            variantId: variantId,
           },
         },
       });
     } else if (fromType === "shop" && fromShopId) {
       sourceInventory = await prisma.shopInventory.findUnique({
         where: {
-          shopId_skuId: {
+          shopId_variantId: {
             shopId: fromShopId,
-            skuId: skuId,
+            variantId: variantId,
           },
         },
       });
@@ -84,9 +96,9 @@ export async function POST(request: Request) {
       if (fromType === "store" && fromStoreId) {
         await tx.storeInventory.update({
           where: {
-            storeId_skuId: {
+            storeId_variantId: {
               storeId: fromStoreId,
-              skuId: skuId,
+              variantId: variantId,
             },
           },
           data: {
@@ -98,9 +110,9 @@ export async function POST(request: Request) {
       } else if (fromType === "shop" && fromShopId) {
         await tx.shopInventory.update({
           where: {
-            shopId_skuId: {
+            shopId_variantId: {
               shopId: fromShopId,
-              skuId: skuId,
+              variantId: variantId,
             },
           },
           data: {
@@ -115,9 +127,9 @@ export async function POST(request: Request) {
       if (toType === "store" && toStoreId) {
         await tx.storeInventory.upsert({
           where: {
-            storeId_skuId: {
+            storeId_variantId: {
               storeId: toStoreId,
-              skuId: skuId,
+              variantId: variantId,
             },
           },
           update: {
@@ -128,16 +140,16 @@ export async function POST(request: Request) {
           create: {
             storeId: toStoreId,
             productId: productId,
-            skuId: skuId,
+            variantId: variantId,
             quantity: quantity,
           },
         });
       } else if (toType === "shop" && toShopId) {
         await tx.shopInventory.upsert({
           where: {
-            shopId_skuId: {
+            shopId_variantId: {
               shopId: toShopId,
-              skuId: skuId,
+              variantId: variantId,
             },
           },
           update: {
@@ -148,7 +160,7 @@ export async function POST(request: Request) {
           create: {
             shopId: toShopId,
             productId: productId,
-            skuId: skuId,
+            variantId: variantId,
             quantity: quantity,
           },
         });

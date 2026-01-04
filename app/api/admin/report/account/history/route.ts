@@ -225,14 +225,14 @@ export async function GET(request: NextRequest) {
       timeline.push({
         date: transaction.tranDate,
         type: isIncoming ? 'transaction-in' : 'transaction-out',
-        description: `${transaction.details} (${transaction.category.name})`,
+        description: `${transaction.details}${transaction.category ? ` (${transaction.category.name})` : ''}`,
         amount: transaction.amount,
         balance: runningBalance,
         details: {
           user: transaction.user?.name,
           reference: transaction.ref,
           type: transaction.type,
-          category: transaction.category.name
+          category: transaction.category?.name
         }
       });
     });

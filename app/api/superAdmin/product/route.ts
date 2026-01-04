@@ -68,12 +68,9 @@ export async function POST(request: NextRequest) {
       include: {
         variants: {
           include: {
-            skus: {
-              include: {
-                shopInventory: true,
-                storeInventory: true,
-              },
-            },
+            skus: true,
+            shopInventory: true,
+            storeInventory: true,
           },
         },
       },

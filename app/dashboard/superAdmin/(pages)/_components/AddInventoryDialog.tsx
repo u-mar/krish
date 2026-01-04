@@ -314,7 +314,6 @@ export default function AddInventoryDialog({
                 setOpen(false);
                 reset();
                 setSelectedVariants({});
-                setSelectedSkus({});
               }}
               disabled={loading}
             >

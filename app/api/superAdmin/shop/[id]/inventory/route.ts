@@ -145,13 +145,10 @@ export async function GET(
     const inventory = await prisma.shopInventory.findMany({
       where: { shopId: params.id },
       include: {
-        sku: {
+        variant: {
           include: {
-            variant: {
-              include: {
-                product: true,
-              },
-            },
+            skus: true,
+            product: true,
           },
         },
       },
